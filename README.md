@@ -18,12 +18,27 @@ git remote add origin https://github.com/DEIN-NAME/libri.git
 git push -u origin main
 ```
 
-3. Im Repository unter **Settings → Pages** bei *Source* **GitHub Actions** wählen.
-4. Der erste Build läuft automatisch. Danach liegt die App unter
-   `https://DEIN-NAME.github.io/libri/`.
+3. Im Repository unter **Settings → Pages** bei *Source* **„Deploy from a branch"**
+   wählen, Branch **main**, Ordner **/docs**.
+4. Nach dem ersten Push dauert es meist ein bis zwei Minuten, bis die Seite unter
+   `https://DEIN-NAME.github.io/libri/` erreichbar ist.
 
-Wenn du das Repository anders nennst, muss `base` in `vite.config.js`, `start_url` und
-`scope` im Manifest sowie die Pfade in `index.html` entsprechend angepasst werden.
+Alle Pfade in der App sind relativ, der Name des Repositorys spielt also keine Rolle.
+
+## Neue Version veröffentlichen
+
+```bash
+npm run build
+git add .
+git commit -m "Update"
+git push
+```
+
+`npm run build` schreibt das fertige Ergebnis nach `docs/` — dorthin zeigt GitHub
+Pages. Der Ordner liegt bewusst getrennt vom Quellcode: läge das Ziel im
+Hauptverzeichnis, würde der Build die `index.html` überschreiben, die er selbst als
+Vorlage braucht, und der nächste Durchlauf würde diese bereits fertige Datei erneut
+verarbeiten. `docs/` ist trotzdem ganz normaler Teil von main, kein separater Branch.
 
 ## Installieren
 
@@ -33,6 +48,13 @@ Wenn du das Repository anders nennst, muss `base` in `vite.config.js`, `start_ur
 Auf dem iPhone ist das nicht optional. Safari löscht die Daten einer nur im Tab
 besuchten Website nach sieben Tagen ohne Besuch; installiert bleiben sie erhalten.
 Lade zusätzlich regelmäßig eine Sicherung herunter (Mehr → Sicherung).
+
+## Fehlersuche
+
+Bleibt die Seite leer und es steht „Libri startet…" oder eine Fehlermeldung da,
+konnte das JavaScript nicht geladen werden — die angezeigte Adresse sagt, welche
+Datei gefehlt hat. Meist heißt das: `docs/` wurde nicht mitgepusht, oder bei Pages
+ist unter Source noch nicht Branch main / Ordner `/docs` eingestellt.
 
 ## Lokal entwickeln
 

@@ -6,6 +6,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // auf einer eigenen Domain, ohne dass hier etwas angepasst werden muss.
 export default defineConfig({
   base: './',
+  build: {
+    // "Deploy from a branch" braucht das fertige Ergebnis direkt im Repo,
+    // nicht nur in der Action. docs/ lässt sich in GitHub Pages als Quelle
+    // auswählen (Branch: main, Ordner: /docs).
+    outDir: 'docs',
+    emptyOutDir: true
+  },
   plugins: [
     react(),
     VitePWA({
