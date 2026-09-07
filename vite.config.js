@@ -2,10 +2,10 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Bei einem GitHub-Pages-Projektsite liegt die App unter /libri/.
-// Falls du eine eigene Domain oder <user>.github.io nutzt: base auf '/' setzen.
+// Relative Pfade: die App läuft damit unter jedem Repo-Namen und auch
+// auf einer eigenen Domain, ohne dass hier etwas angepasst werden muss.
 export default defineConfig({
-  base: '/libri/',
+  base: './',
   plugins: [
     react(),
     VitePWA({
@@ -40,8 +40,8 @@ export default defineConfig({
         short_name: 'Libri',
         description: 'Deine Bibliothek: scannen, sortieren, lesen.',
         lang: 'de',
-        start_url: '/libri/',
-        scope: '/libri/',
+        start_url: './',
+        scope: './',
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#171b21',

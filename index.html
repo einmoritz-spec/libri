@@ -5,14 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#171b21" />
     <meta name="description" content="Libri — deine Bibliothek: scannen, sortieren, lesen." />
-    <link rel="icon" type="image/svg+xml" href="/libri/favicon.svg" />
-    <link rel="apple-touch-icon" href="/libri/icon-192.png" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Libri</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #171b21; color: #e9e4da;
+        font-family: system-ui, -apple-system, sans-serif; }
+      #boot { padding: 40px 22px; max-width: 34em; line-height: 1.5; }
+      #boot h1 { font-size: 19px; margin: 0 0 10px; }
+      #boot p { color: #8d97a5; margin: 0 0 8px; font-size: 15px; }
+      #boot code { color: #e0a93b; font-size: 13px; word-break: break-all; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Dieser Platzhalter wird von React sofort überschrieben. Bleibt er stehen,
+         wurde das JavaScript nicht geladen — dann steht hier auch der Grund. -->
+    <div id="root">
+      <div id="boot">
+        <h1>Libri startet…</h1>
+        <p>Bleibt diese Meldung stehen, konnte die App nicht geladen werden.</p>
+      </div>
+    </div>
+    <script>
+      window.addEventListener('error', function (e) {
+        var boot = document.getElementById('boot')
+        if (!boot) return
+        var what = e.target && e.target.src ? e.target.src : (e.message || 'unbekannt')
+        boot.innerHTML =
+          '<h1>Libri konnte nicht starten</h1>' +
+          '<p>Fehlgeschlagen beim Laden von:</p><p><code>' +
+          String(what).replace(/</g, '&lt;') + '</code></p>' +
+          '<p>Zeig diese Zeile weiter, damit sich der Fehler einordnen lässt.</p>'
+      }, true)
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
