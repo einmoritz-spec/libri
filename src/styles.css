@@ -529,3 +529,58 @@ h2 {
   max-height: 170px;
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
 }
+
+/* ---------- Cover zuschneiden ---------- */
+
+.cropper-sheet { z-index: 70; }
+
+.crop-frame {
+  position: relative;
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 2 / 3;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #000;
+  border-radius: 4px;
+  touch-action: none;
+  cursor: grab;
+}
+.crop-frame:active { cursor: grabbing; }
+
+.crop-frame img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  transform-origin: center;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.crop-zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 300px;
+  margin: 18px auto 0;
+  font-size: 13px;
+  color: var(--dim);
+}
+.crop-zoom input { flex: 1; }
+
+.crop-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scan-found-isbn {
+  color: var(--paper) !important;
+  font-family: var(--serif);
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  margin: 2px 0 0 !important;
+}

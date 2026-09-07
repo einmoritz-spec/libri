@@ -63,7 +63,7 @@ const OL_LANG = {
   chi: 'zh', kor: 'ko'
 }
 
-async function fetchJson(url, timeout = 9000) {
+async function fetchJson(url, timeout = 6500) {
   const ctrl = new AbortController()
   const t = setTimeout(() => ctrl.abort(), timeout)
   try {
@@ -123,6 +123,47 @@ async function fromOpenLibrary(isbn) {
   }
 }
 
+/* Apple Books als dritte Quelle. Deckt vor allem Selfpublishing-Titel ab,
+   bei denen Open Library und Google oft nichts haben. Die Bilder-URL lässt
+   sich von 100px auf 600px hochdrehen. */
+async function fromApple({ isbn, title, authors }) {
+  let data = await fetchJson(`https://itunes.apple.com/lookup?isbn=${isbn}`)
+  if (!data?.results?.length && title) {
+    const term = encodeURIComponent(`${title} ${authors?.[0] || ''}`.trim())
+    data = await fetchJson(`https://itunes.apple.com/search?term=${term}&entity=ebook&limit=1`)
+  }
+  const r = data?.results?.[0]
+  if (!r) return null
+  return {
+    coverUrl: r.artworkUrl100
+      ? r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.')
+      : null,
+    year: yearFrom(r.releaseDate),
+    authors: r.artistName ? [r.artistName] : []
+  }
+}
+
+/* Wenn die ISBN-Suche Lücken lässt, nochmal über Titel und Autor suchen —
+   oft ist dieselbe Ausgabe unter einer anderen ISBN vollständiger erfasst. */
+async function byTitle(title, author) {
+  if (!title) return null
+  const q = encodeURIComponent(`intitle:${title}${author ? ` inauthor:${author}` : ''}`)
+  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`)
+  const hit = (data?.items || [])
+    .map((i) => i.volumeInfo)
+    .find((v) => v?.pageCount || v?.language)
+  if (!hit) return null
+  const img = hit.imageLinks || {}
+  return {
+    pages: hit.pageCount || null,
+    language: hit.language || '',
+    publisher: hit.publisher || '',
+    coverUrl: (img.large || img.medium || img.thumbnail || '')
+      .replace(/^http:/, 'https:')
+      .replace('&edge=curl', '') || null
+  }
+}
+
 function pick(...vals) {
   for (const v of vals) {
     if (Array.isArray(v) ? v.length : v !== null && v !== undefined && v !== '') return v
@@ -142,7 +183,7 @@ export async function lookupIsbn(rawIsbn) {
   const o = ol || {}
   const sources = [google && 'Google Books', ol && 'Open Library'].filter(Boolean)
 
-  return {
+  const merged = {
     isbn13: isbn,
     title: pick(g.title, o.title) || '',
     subtitle: pick(g.subtitle, o.subtitle) || '',
@@ -152,7 +193,33 @@ export async function lookupIsbn(rawIsbn) {
     pages: pick(g.pages, o.pages),
     language: pick(g.language, o.language) || '',
     // Open-Library-Cover zuerst: liefert CORS-Header, also offline speicherbar.
-    coverUrl: pick(o.coverUrl, g.coverUrl),
+    coverUrl: pick(o.coverUrl, g.coverUrl)
+  }
+
+  // Zweite Runde nur für das, was noch fehlt — beide Anfragen gleichzeitig,
+  // damit die Wartezeit nicht Quelle für Quelle aufsummiert.
+  const needsExtra = !merged.pages || !merged.language || !merged.publisher
+  const needsCover = !merged.coverUrl
+
+  const [extra, apple] = await Promise.all([
+    needsExtra ? byTitle(merged.title, merged.authors[0]) : null,
+    needsCover ? fromApple({ isbn, title: merged.title, authors: merged.authors }) : null
+  ])
+
+  if (extra) {
+    merged.pages = merged.pages || extra.pages
+    merged.language = merged.language || extra.language
+    merged.publisher = merged.publisher || extra.publisher
+    merged.coverUrl = merged.coverUrl || extra.coverUrl
+    if (extra.pages || extra.language) sources.push('Titelsuche')
+  }
+  if (apple?.coverUrl && !merged.coverUrl) {
+    merged.coverUrl = apple.coverUrl
+    sources.push('Apple Books')
+  }
+
+  return {
+    ...merged,
     fallbackCoverUrl: `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`,
     source: sources.join(' + ')
   }

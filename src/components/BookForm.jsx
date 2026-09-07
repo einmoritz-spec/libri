@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { STATUS, STATUS_ORDER } from '../lib/db'
-import { languageName } from '../lib/metadata'
+import { languageName, dominantColor } from '../lib/metadata'
 import { Cover } from './ui'
+import CoverCropper from './CoverCropper'
 
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'nl', 'sv', 'pl', 'ru', 'la']
 
@@ -12,8 +13,26 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
     tagsText: (draft.tags || []).join(', ')
   })
   const [saving, setSaving] = useState(false)
+  const [cropping, setCropping] = useState(null)
+  const fileRef = useRef(null)
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  function pickCover(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) setCropping(file)
+  }
+
+  async function applyCrop(blob) {
+    const color = await dominantColor(blob)
+    setForm((f) => ({ ...f, coverBlob: blob, coverUrl: null, spineColor: color || f.spineColor }))
+    setCropping(null)
+  }
+
+  function removeCover() {
+    setForm((f) => ({ ...f, coverBlob: null, coverUrl: null }))
+  }
 
   async function submit() {
     if (!form.title.trim()) return
@@ -31,6 +50,16 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
     setSaving(false)
   }
 
+  if (cropping) {
+    return (
+      <CoverCropper
+        file={cropping}
+        onDone={applyCrop}
+        onCancel={() => setCropping(null)}
+      />
+    )
+  }
+
   return (
     <div className="sheet">
       <div className="sheet-bar">
@@ -42,11 +71,21 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
 
       <h2 style={{ marginTop: 0 }}>{title}</h2>
 
-      {(form.coverUrl || form.coverBlob) && (
+      <div className="field">
+        <label>Cover</label>
         <div className="form-cover">
           <Cover book={form} />
         </div>
-      )}
+        <div className="btn-row">
+          <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
+            {form.coverBlob || form.coverUrl ? 'Anderes Bild wählen' : 'Cover hochladen'}
+          </button>
+          {(form.coverBlob || form.coverUrl) && (
+            <button type="button" className="btn btn-quiet" onClick={removeCover}>Entfernen</button>
+          )}
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickCover} />
+      </div>
 
       <div className="field">
         <label htmlFor="f-title">Titel</label>

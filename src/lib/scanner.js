@@ -37,29 +37,44 @@ export function stopCamera(stream, videoEl) {
 
 /**
  * Startet die Erkennung auf einem bereits laufenden <video>.
- * onResult bekommt den rohen Barcode-String. Rückgabe: stop().
+ * onResult bekommt den rohen Barcode-String, onEngine den Namen der aktiven Engine.
+ * Rückgabe: stop().
  */
-export async function startDetection(videoEl, onResult) {
-  if (await hasNativeDetector()) {
+export async function startDetection(videoEl, onResult, { force = null, onEngine } = {}) {
+  const useNative = force ? force === 'native' : await hasNativeDetector()
+
+  if (useNative) {
     const detector = new window.BarcodeDetector({ formats: ['ean_13'] })
     let running = true
+    let fails = 0
+    let switched = null
+
     const tick = async () => {
       if (!running) return
       try {
         const codes = await detector.detect(videoEl)
+        fails = 0
         if (codes.length) onResult(codes[0].rawValue)
       } catch {
-        /* einzelne Frames dürfen scheitern */
+        // Chrome meldet die API teils als vorhanden, bevor das Play-Services-Modul
+        // dahinter geladen ist. Dann scheitert jeder Frame — also umschalten.
+        if (++fails >= 5) {
+          running = false
+          switched = await startDetection(videoEl, onResult, { force: 'zxing', onEngine })
+          return
+        }
       }
       if (running) setTimeout(tick, 220)
     }
+
+    onEngine?.('nativ')
     tick()
     return () => {
       running = false
+      switched?.()
     }
   }
 
-  // Fallback
   const [{ BrowserMultiFormatReader }, { DecodeHintType, BarcodeFormat }] =
     await Promise.all([import('@zxing/browser'), import('@zxing/library')])
 
@@ -71,6 +86,7 @@ export async function startDetection(videoEl, onResult) {
   const controls = await reader.decodeFromVideoElement(videoEl, (result) => {
     if (result) onResult(result.getText())
   })
+  onEngine?.('ZXing')
   return () => {
     try {
       controls.stop()

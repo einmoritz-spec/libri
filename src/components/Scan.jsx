@@ -12,12 +12,15 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
   const busyRef = useRef(false)
   const lastRef = useRef({ code: null, at: 0 })
 
-  const [state, setState] = useState('idle') // idle | live | busy
+  const [state, setState] = useState('idle') // idle | live | found
   const [error, setError] = useState(null)
   const [torchOn, setTorchOn] = useState(false)
   const [canTorch, setCanTorch] = useState(false)
   const [manualIsbn, setManualIsbn] = useState('')
   const [engine, setEngine] = useState('')
+  const [forced, setForced] = useState(null)
+  const [foundIsbn, setFoundIsbn] = useState(null)
+  const [manualBusy, setManualBusy] = useState(false)
 
   useEffect(() => {
     hasNativeDetector().then((n) => setEngine(n ? 'nativ' : 'ZXing'))
@@ -39,15 +42,28 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       streamRef.current = stream
       setCanTorch(torchSupported(stream))
       setState('live')
-      stopRef.current = await startDetection(videoRef.current, handleCode)
+      stopRef.current = await startDetection(videoRef.current, handleCode, {
+        force: forced,
+        onEngine: setEngine
+      })
     } catch (e) {
       setState('idle')
       if (e?.name === 'NotAllowedError') {
-        setError('Der Kamerazugriff ist blockiert. Erlaube ihn in den Browser-Einstellungen für diese Seite.')
+        setError(
+          'Der Kamerazugriff ist blockiert. Als installierte App liegt das meist an ' +
+          'Android selbst, nicht an Chrome: Einstellungen → Apps → Libri → ' +
+          'Berechtigungen → Kamera → Zulassen. In einem normalen Chrome-Tab hilft ' +
+          'stattdessen das Schloss-Symbol in der Adresszeile.'
+        )
       } else if (e?.name === 'NotFoundError') {
         setError('Keine Kamera gefunden.')
+      } else if (e?.name === 'NotReadableError') {
+        setError('Eine andere App blockiert gerade die Kamera. Sie schließen und erneut versuchen.')
       } else {
-        setError('Die Kamera lässt sich nicht öffnen. Auf dem iPhone funktioniert das nur in Safari.')
+        setError(
+          `Die Kamera lässt sich nicht öffnen (${e?.name || 'Fehler'}: ${e?.message || 'unbekannt'}). ` +
+          'Auf dem iPhone funktioniert das nur in Safari.'
+        )
       }
     }
   }
@@ -61,11 +77,13 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
     if (!isBookBarcode(raw)) return // Preis-Barcodes und Ähnliches ignorieren
 
     busyRef.current = true
-    setState('busy')
     navigator.vibrate?.(35)
+    teardown() // Barcode sitzt — die Kamera muss dafür nicht länger laufen
+    setFoundIsbn(toIsbn13(raw))
+    setState('found')
     await resolveIsbn(raw)
     busyRef.current = false
-    if (streamRef.current) setState('live')
+    setState('idle')
   }
 
   async function resolveIsbn(raw) {
@@ -115,10 +133,10 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       notify('Diese ISBN stimmt nicht. 10 oder 13 Ziffern.')
       return
     }
-    setState('busy')
+    setManualBusy(true)
     await resolveIsbn(isbn)
     setManualIsbn('')
-    setState(streamRef.current ? 'live' : 'idle')
+    setManualBusy(false)
   }
 
   return (
@@ -133,23 +151,25 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       {/* Das <video> bleibt immer im DOM — sonst hat openCamera kein Ziel zum Anhängen. */}
       <div className="viewport">
         <video ref={videoRef} muted playsInline />
-        {state === 'live' || state === 'busy' ? (
-          <div className="reticle" />
-        ) : (
+        {state === 'live' && <div className="reticle" />}
+        {state === 'idle' && (
           <div className="viewport-idle">
             <p>Halte den Barcode auf der Buchrückseite vor die Kamera.</p>
             <button className="btn btn-primary" onClick={start}>Kamera starten</button>
           </div>
         )}
+        {state === 'found' && (
+          <div className="viewport-idle scan-found">
+            <span className="spinner" />
+            <p className="scan-found-isbn">{foundIsbn}</p>
+            <p>Erkannt — wird nachgeschlagen…</p>
+          </div>
+        )}
       </div>
 
-      {(state === 'live' || state === 'busy') && (
+      {state === 'live' && (
         <>
-          <p className="hint">
-            {state === 'busy'
-              ? <><span className="spinner" /> Buchdaten werden geholt…</>
-              : 'Barcode mittig halten. Erkennung läuft automatisch.'}
-          </p>
+          <p className="hint">Barcode mittig halten. Erkennung läuft automatisch.</p>
           <div className="scan-tools">
             {canTorch && (
               <button className="btn" onClick={async () => {
@@ -157,6 +177,15 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
                 if (ok) setTorchOn(!torchOn)
               }}>{torchOn ? 'Licht aus' : 'Licht an'}</button>
             )}
+            <button className="btn" onClick={async () => {
+              const next = engine === 'ZXing' ? 'native' : 'zxing'
+              setForced(next)
+              stopRef.current?.()
+              stopRef.current = await startDetection(videoRef.current, handleCode, {
+                force: next, onEngine: setEngine
+              })
+              notify(`Erkennung auf ${next === 'zxing' ? 'ZXing' : 'nativ'} umgestellt`)
+            }}>Andere Erkennung</button>
             <button className="btn" onClick={() => { teardown(); setState('idle') }}>
               Kamera stoppen
             </button>
@@ -174,7 +203,9 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
           onChange={(e) => setManualIsbn(e.target.value)}
           aria-label="ISBN eingeben"
         />
-        <button className="btn" onClick={submitManual} disabled={!manualIsbn}>Suchen</button>
+        <button className="btn" onClick={submitManual} disabled={!manualIsbn || manualBusy}>
+          {manualBusy ? <span className="spinner" /> : 'Suchen'}
+        </button>
       </div>
 
       <p className="hint" style={{ textAlign: 'left' }}>

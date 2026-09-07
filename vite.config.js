@@ -17,6 +17,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // Registrierung übernimmt main.jsx, für kontrolliertes Update-Verhalten
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
