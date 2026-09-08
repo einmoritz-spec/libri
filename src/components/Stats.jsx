@@ -1,6 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../lib/db'
 import { languageName } from '../lib/metadata'
+import { EmptyBookIcon } from './ui'
 
 function Bars({ rows, unit }) {
   const max = Math.max(...rows.map((r) => r[1]), 1)
@@ -56,7 +57,7 @@ export default function Stats() {
     return (
       <div className="screen">
         <div className="screen-head"><h1 className="wordmark">Statistik</h1></div>
-        <div className="empty"><p>Sobald Bücher im Regal stehen, steht hier etwas.</p></div>
+        <div className="empty"><EmptyBookIcon /><p>Sobald Bücher im Regal stehen, steht hier etwas.</p></div>
       </div>
     )
   }

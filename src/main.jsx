@@ -1,20 +1,27 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { registerSW } from 'virtual:pwa-register'
 import App from './App'
 import './styles.css'
 
-// Prüft beim Start und danach alle 60s, ob eine neue Version bereitsteht,
-// und übernimmt sie sofort. So bleibt die installierte App nie länger als
-// eine Minute auf einem veralteten Stand hängen — der Fall, der als
-// "Klicks tun nichts" oder "lädt ewig" auffällt.
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    updateSW(true)
-  }
+// Die Update-Übernahme selbst (skipWaiting/clientsClaim + Reload) läuft über
+// die automatisch eingebundene Registrierung — die einzige Variante, bei der
+// eine neue Version zuverlässig sofort aktiv wird statt nur im Hintergrund zu
+// warten. Hier nur zusätzlich: alle 60s aktiv nachfragen, ob es was Neues
+// gibt, statt auf den viel selteneren Standardrhythmus des Browsers zu warten.
+// Steuert den kbd-nav-Zustand für die Fokus-Umrandung in styles.css: nur
+// echte Tab-Navigation setzt sie, jede Berührung/Klick nimmt sie wieder weg.
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') document.body.classList.add('kbd-nav')
 })
-setInterval(() => updateSW(), 60_000)
+window.addEventListener('pointerdown', () => {
+  document.body.classList.remove('kbd-nav')
+})
+
+if ('serviceWorker' in navigator) {
+  setInterval(() => {
+    navigator.serviceWorker.getRegistration().then((reg) => reg?.update())
+  }, 60_000)
+}
 
 // Ein Klick, der eine abgelehnte Promise auslöst, sah bisher aus wie "nichts
 // passiert". Ab jetzt eine sichtbare Meldung statt Stille — unabhängig von

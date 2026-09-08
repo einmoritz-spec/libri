@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, STATUS, STATUS_ORDER } from '../lib/db'
-import { Cover } from './ui'
+import { Cover, EmptyBookIcon } from './ui'
+import ShelfView from './ShelfView'
 
 const SORTS = {
   addedAt: 'Zuletzt hinzugefügt',
@@ -15,6 +16,9 @@ export default function Library({ onOpen, onScan, onManual }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [sort, setSort] = useState('addedAt')
+  const [view, setView] = useState(() => localStorage.getItem('libri:view') || 'grid')
+
+  useEffect(() => localStorage.setItem('libri:view', view), [view])
 
   const shown = useMemo(() => {
     if (!books) return []
@@ -48,6 +52,7 @@ export default function Library({ onOpen, onScan, onManual }) {
       <div className="screen">
         <div className="screen-head"><h1 className="wordmark">Libri</h1></div>
         <div className="empty">
+          <EmptyBookIcon />
           <p>Dein Regal ist noch leer.</p>
           <div className="btn-row" style={{ justifyContent: 'center' }}>
             <button className="btn btn-primary" onClick={onScan}>Erstes Buch scannen</button>
@@ -67,11 +72,17 @@ export default function Library({ onOpen, onScan, onManual }) {
     <div className="screen">
       <div className="screen-head">
         <h1 className="wordmark">Libri</h1>
-        <span className="count">
-          {shown.length === books.length
-            ? `${books.length} Bücher`
-            : `${shown.length} von ${books.length}`}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="count">
+            {shown.length === books.length
+              ? `${books.length} Bücher`
+              : `${shown.length} von ${books.length}`}
+          </span>
+          <div className="view-toggle">
+            <button aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Raster</button>
+            <button aria-pressed={view === 'shelf'} onClick={() => setView('shelf')}>Regal</button>
+          </div>
+        </div>
       </div>
 
       <input
@@ -93,18 +104,26 @@ export default function Library({ onOpen, onScan, onManual }) {
             {STATUS[s]} {counts[s]}
           </button>
         ))}
-        <select className="chip" value={sort} onChange={(e) => setSort(e.target.value)}
-          aria-label="Sortierung">
-          {Object.entries(SORTS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
-        </select>
+        {view === 'grid' && (
+          <select className="chip" value={sort} onChange={(e) => setSort(e.target.value)}
+            aria-label="Sortierung">
+            {Object.entries(SORTS).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        )}
       </div>
 
-      {shown.length === 0 ? (
-        <div className="empty"><p>Dazu passt nichts im Regal.</p></div>
+      {view === 'shelf' ? (
+        <ShelfView
+          books={shown}
+          onOpen={onOpen}
+          locked={query.trim() !== '' || status !== 'all'}
+        />
+      ) : shown.length === 0 ? (
+        <div className="empty"><EmptyBookIcon /><p>Dazu passt nichts im Regal.</p></div>
       ) : (
-        <div className="shelf">
+        <div className="cover-grid">
           {shown.map((b) => {
             const pct = b.pages && b.currentPage
               ? Math.min(100, (b.currentPage / b.pages) * 100)

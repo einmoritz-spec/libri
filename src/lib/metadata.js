@@ -164,6 +164,42 @@ async function byTitle(title, author) {
   }
 }
 
+/** Suche nach Titel/Autor statt ISBN — für Bücher ohne Barcode zur Hand. */
+export async function searchBooksByText(query) {
+  const q = query.trim()
+  if (!q) return []
+  const data = await fetchJson(
+    `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=12&printType=books`
+  )
+  const items = data?.items || []
+  return items
+    .map((it) => {
+      const v = it.volumeInfo || {}
+      const ids = v.industryIdentifiers || []
+      const rawIsbn =
+        ids.find((i) => i.type === 'ISBN_13')?.identifier ||
+        ids.find((i) => i.type === 'ISBN_10')?.identifier
+      const img = v.imageLinks || {}
+      const cover = img.thumbnail || img.smallThumbnail || null
+      return {
+        key: it.id,
+        isbn13: rawIsbn ? toIsbn13(rawIsbn) : null,
+        title: v.title || '',
+        subtitle: v.subtitle || '',
+        authors: v.authors || [],
+        year: yearFrom(v.publishedDate),
+        pages: v.pageCount || null,
+        language: v.language || '',
+        publisher: v.publisher || '',
+        thumb: cover ? cover.replace(/^http:/, 'https:') : null,
+        coverUrl: (img.large || img.medium || img.thumbnail || '')
+          .replace(/^http:/, 'https:')
+          .replace('&edge=curl', '') || null
+      }
+    })
+    .filter((b) => b.title)
+}
+
 function pick(...vals) {
   for (const v of vals) {
     if (Array.isArray(v) ? v.length : v !== null && v !== undefined && v !== '') return v

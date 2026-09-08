@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   openCamera, stopCamera, startDetection, torchSupported, setTorch, hasNativeDetector
 } from '../lib/scanner'
-import { lookupIsbn, isBookBarcode, toIsbn13, fetchCoverBlob, dominantColor } from '../lib/metadata'
+import {
+  lookupIsbn, isBookBarcode, toIsbn13, fetchCoverBlob, dominantColor, searchBooksByText
+} from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
 
 export default function Scan({ onFound, onExisting, onManual, notify }) {
@@ -21,6 +23,10 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
   const [forced, setForced] = useState(null)
   const [foundIsbn, setFoundIsbn] = useState(null)
   const [manualBusy, setManualBusy] = useState(false)
+  const [textQuery, setTextQuery] = useState('')
+  const [textResults, setTextResults] = useState(null)
+  const [textBusy, setTextBusy] = useState(false)
+  const [pickBusy, setPickBusy] = useState(null)
 
   useEffect(() => {
     hasNativeDetector().then((n) => setEngine(n ? 'nativ' : 'ZXing'))
@@ -139,6 +145,58 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
     setManualBusy(false)
   }
 
+  async function submitTextSearch() {
+    if (!textQuery.trim()) return
+    setTextBusy(true)
+    setTextResults(null)
+    try {
+      const results = await searchBooksByText(textQuery)
+      setTextResults(results)
+      if (!results.length) notify('Nichts gefunden. Vielleicht anders schreiben?')
+    } catch {
+      notify('Die Suche hat nicht geklappt.')
+      setTextResults([])
+    } finally {
+      setTextBusy(false)
+    }
+  }
+
+  async function pickResult(r) {
+    setPickBusy(r.key)
+    try {
+      if (r.isbn13) {
+        // Über die ISBN weiterreichen: prüft Duplikate und holt die volle,
+        // aus mehreren Quellen zusammengeführte Beschreibung wie beim Scannen.
+        await resolveIsbn(r.isbn13)
+      } else {
+        // Kein ISBN in den Suchergebnissen — Treffer direkt übernehmen.
+        let coverBlob = await fetchCoverBlob(r.coverUrl)
+        const spineColor = await dominantColor(coverBlob)
+        onFound(
+          emptyBook({
+            isbn13: null,
+            title: r.title,
+            subtitle: r.subtitle,
+            authors: r.authors,
+            publisher: r.publisher,
+            year: r.year,
+            pages: r.pages,
+            language: r.language,
+            coverUrl: coverBlob ? null : r.coverUrl,
+            coverBlob,
+            spineColor,
+            source: 'Google Books (Titelsuche)'
+          }),
+          false
+        )
+      }
+      setTextResults(null)
+      setTextQuery('')
+    } finally {
+      setPickBusy(null)
+    }
+  }
+
   return (
     <div className="screen">
       <div className="screen-head">
@@ -207,6 +265,47 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
           {manualBusy ? <span className="spinner" /> : 'Suchen'}
         </button>
       </div>
+
+      <h2>Titel oder Autor suchen</h2>
+      <div className="progress">
+        <input
+          style={{ flex: 1, width: 'auto' }}
+          placeholder="z. B. Dungeon Crawler Carl"
+          value={textQuery}
+          onChange={(e) => setTextQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && submitTextSearch()}
+          aria-label="Titel oder Autor eingeben"
+        />
+        <button className="btn" onClick={submitTextSearch} disabled={!textQuery.trim() || textBusy}>
+          {textBusy ? <span className="spinner" /> : 'Suchen'}
+        </button>
+      </div>
+
+      {textResults && (
+        <div className="search-results">
+          {textResults.map((r) => (
+            <button
+              key={r.key}
+              className="search-result"
+              disabled={pickBusy !== null}
+              onClick={() => pickResult(r)}
+            >
+              {r.thumb ? (
+                <img src={r.thumb} alt="" />
+              ) : (
+                <span className="search-result-blank" />
+              )}
+              <span className="search-result-text">
+                <span className="search-result-title">{r.title}</span>
+                <span className="search-result-author">
+                  {[r.authors?.[0], r.year].filter(Boolean).join(' · ') || '—'}
+                </span>
+              </span>
+              {pickBusy === r.key && <span className="spinner" />}
+            </button>
+          ))}
+        </div>
+      )}
 
       <p className="hint" style={{ textAlign: 'left' }}>
         Kein Barcode auf dem Buch?{' '}
