@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, addBook, emptyBook } from './lib/db'
+import { db, addBook, emptyBook, isAutoBackupDue, exportLibrary, markBackupDone } from './lib/db'
 import Library from './components/Library'
 import Scan from './components/Scan'
 // Erst laden, wenn der Tab wirklich geöffnet wird — verkleinert das, was beim
@@ -42,6 +42,35 @@ export default function App() {
     setToast(message)
     setTimeout(() => setToast((t) => (t === message ? null : t)), 2600)
   }, [])
+
+  // Automatische Sicherung: einmal pro Woche im Hintergrund als Datei
+  // ablegen, ohne dass dafür extra der Einstellungen-Screen besucht werden
+  // muss. Läuft nur, wenn die Datenbank offen ist und mindestens ein Buch da
+  // ist — eine leere Bibliothek muss niemand sichern.
+  useEffect(() => {
+    if (dbState !== 'ready') return
+    let cancelled = false
+    isAutoBackupDue().then(async (due) => {
+      if (!due || cancelled) return
+      try {
+        const data = await exportLibrary()
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `libri-${new Date().toISOString().slice(0, 10)}.json`
+        a.click()
+        URL.revokeObjectURL(url)
+        markBackupDone()
+        notify('Automatische Sicherung gespeichert')
+      } catch {
+        // Kein Alarm, wenn's diesmal nicht klappt — die Erinnerung in den
+        // Einstellungen greift als Auffangnetz, falls es öfter fehlschlägt.
+      }
+    })
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbState])
 
   // Zurück-Taste schließt erst die Detailansicht, nicht die App.
   useEffect(() => {
@@ -87,6 +116,7 @@ export default function App() {
 
       {tab === 'scan' && (
         <Scan
+          sheetOpen={Boolean(openId || draft)}
           notify={notify}
           onFound={(book, unknown, pending) => {
             setDraftUnknown(unknown)

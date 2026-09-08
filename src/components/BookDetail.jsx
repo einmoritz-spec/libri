@@ -95,6 +95,11 @@ export default function BookDetail({ book, onClose, notify }) {
           <h1 className="detail-title">{book.title}</h1>
           {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
           <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
+          {book.series && (
+            <p className="detail-author">
+              {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
+            </p>
+          )}
           <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
         </div>
       </div>

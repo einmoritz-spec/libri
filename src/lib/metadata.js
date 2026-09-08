@@ -83,18 +83,52 @@ const OL_LANG = {
   chi: 'zh', kor: 'ko'
 }
 
-async function fetchJson(url, timeout = 6500) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), timeout)
-  try {
-    const res = await fetch(url, { signal: ctrl.signal })
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  } finally {
-    clearTimeout(t)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+/**
+ * Holt JSON und unterscheidet dabei zwei Dinge, die vorher gleich aussahen:
+ * "Die Quelle kennt das Buch nicht" und "Die Anfrage ist schiefgegangen".
+ * Letzteres wird wiederholt — vor allem Drosselung (429) und Serverfehler
+ * treten sporadisch auf und sorgten sonst dafür, dass dasselbe Buch mal
+ * gefunden wurde und mal nicht.
+ *
+ * ctx.failures zählt endgültig fehlgeschlagene Anfragen, damit der Aufrufer
+ * am Ende weiß, ob "nichts gefunden" überhaupt vertrauenswürdig ist.
+ */
+async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 3 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), timeout)
+    try {
+      const res = await fetch(url, { signal: ctrl.signal })
+      clearTimeout(t)
+
+      if (res.ok) return await res.json()
+
+      // 404 heißt wirklich "kennt das Buch nicht" — nicht wiederholen.
+      if (res.status === 404) return null
+
+      // Drosselung und Serverfehler: kurz warten und nochmal.
+      if (res.status === 429 || res.status >= 500) {
+        if (attempt < attempts) {
+          await sleep(400 * attempt + Math.random() * 200)
+          continue
+        }
+        if (ctx) ctx.failures++
+        return null
+      }
+      return null
+    } catch {
+      clearTimeout(t)
+      if (attempt < attempts) {
+        await sleep(300 * attempt)
+        continue
+      }
+      if (ctx) ctx.failures++
+      return null
+    }
   }
+  return null
 }
 
 function yearFrom(str) {
@@ -102,18 +136,97 @@ function yearFrom(str) {
   return m ? Number(m[0]) : null
 }
 
-async function fromGoogle(isbn, isbn10) {
-  // Google indexiert manche Ausgaben nur unter einer der beiden Schreibweisen,
-  // und der Markt-Parameter ändert die Trefferlage für deutsche Titel spürbar.
+/* Google Books und Open Library liefern Genres grundsätzlich auf Englisch.
+   Feste Übersetzungstabelle statt Vermutung — was nicht eindeutig übersetzbar
+   ist, wird verworfen statt englisch angezeigt. Die Reihenfolge, die geprüft
+   wird, geht vom Speziellsten zum Allgemeinsten (siehe translateCategory). */
+const CATEGORY_DE = {
+  fiction: 'Belletristik', 'non-fiction': 'Sachbuch', nonfiction: 'Sachbuch',
+  fantasy: 'Fantasy', 'science fiction': 'Science-Fiction', 'sci-fi': 'Science-Fiction',
+  'space opera': 'Space Opera', cyberpunk: 'Cyberpunk', 'cyberpunk fiction': 'Cyberpunk',
+  steampunk: 'Steampunk', 'steampunk fiction': 'Steampunk',
+  dystopian: 'Dystopie', dystopias: 'Dystopie', 'post-apocalyptic': 'Postapokalyptisch',
+  'time travel': 'Zeitreise', 'alternative histories (fiction)': 'Alternativgeschichte',
+  'urban fantasy': 'Urban Fantasy', 'paranormal fiction': 'Paranormal', paranormal: 'Paranormal',
+  superheroes: 'Superhelden', epic: 'Epos', 'sword and sorcery fiction': 'Sword & Sorcery',
+  'fairy tales': 'Märchen', mythology: 'Mythologie',
+  mystery: 'Krimi', 'mystery & detective': 'Krimi', detective: 'Krimi', crime: 'Krimi',
+  'true crime': 'True Crime', thriller: 'Thriller', suspense: 'Spannung', horror: 'Horror',
+  romance: 'Liebesroman', 'historical fiction': 'Historischer Roman', historical: 'Historisch',
+  history: 'Geschichte', 'literary fiction': 'Literatur', 'literary criticism': 'Literaturkritik',
+  literature: 'Literatur', classics: 'Klassiker',
+  'young adult fiction': 'Jugendbuch', 'young adult nonfiction': 'Jugendsachbuch',
+  'juvenile fiction': 'Kinderbuch', 'juvenile nonfiction': 'Kindersachbuch',
+  "children's fiction": 'Kinderbuch', 'picture books': 'Bilderbuch',
+  'biography & autobiography': 'Biografie', biography: 'Biografie', autobiography: 'Autobiografie',
+  memoir: 'Memoiren', essays: 'Essays', poetry: 'Lyrik', drama: 'Drama', humor: 'Humor',
+  'comics & graphic novels': 'Comic', 'graphic novels': 'Graphic Novel', comics: 'Comic',
+  'short stories': 'Kurzgeschichten', anthologies: 'Anthologie',
+  western: 'Western', war: 'Krieg', 'war & military fiction': 'Kriegsroman', military: 'Militär',
+  'action & adventure': 'Action & Abenteuer', adventure: 'Abenteuer', 'adventure fiction': 'Abenteuer',
+  political: 'Politik', 'political science': 'Politikwissenschaft', philosophy: 'Philosophie',
+  religion: 'Religion', 'self-help': 'Ratgeber',
+  'business & economics': 'Wirtschaft', economics: 'Wirtschaft',
+  science: 'Wissenschaft', technology: 'Technik', 'technology & engineering': 'Technik',
+  nature: 'Natur', travel: 'Reise', cooking: 'Kochen', art: 'Kunst', music: 'Musik',
+  'sports & recreation': 'Sport', 'health & fitness': 'Gesundheit', psychology: 'Psychologie',
+  education: 'Bildung', reference: 'Nachschlagewerk',
+  'family & relationships': 'Familie & Beziehungen', 'social science': 'Sozialwissenschaft',
+  'body, mind & spirit': 'Körper, Geist & Seele', games: 'Spiele', 'games & activities': 'Spiele',
+  computers: 'Computer', medical: 'Medizin', law: 'Recht', general: 'Allgemein'
+}
+
+/** Übersetzt eine einzelne Kategorie. Google liefert Hierarchien mit "/"
+    getrennt (spezifisch am Ende), Open Library oft mit Komma oder "--".
+    Von speziell nach allgemein geprüft, erster Treffer gewinnt; nichts
+    Passendes gefunden heißt: verwerfen statt englisch anzeigen. */
+function translateCategory(raw) {
+  const parts = String(raw || '')
+    .split(/\/|--|,/)
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean)
+    .reverse()
+  for (const p of parts) {
+    if (CATEGORY_DE[p]) return CATEGORY_DE[p]
+  }
+  return null
+}
+
+/** Wandelt eine Liste roher Kategorie-Strings in deutsche Schlagwörter um,
+    ohne Duplikate und ohne unübersetzten englischen Text. */
+function translateCategories(raw, max = 2) {
+  const out = []
+  for (const r of raw || []) {
+    const de = translateCategory(r)
+    if (de && !out.includes(de)) out.push(de)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+async function fromGoogle(isbn, isbn10, ctx) {
+  // Drei Anläufe: beide ISBN-Schreibweisen gezielt, dann die ISBN als
+  // Freitext. Letzteres findet Ausgaben, die zwar erfasst sind, deren ISBN
+  // aber nicht im dafür vorgesehenen Feld steht — gar nicht so selten.
   const tries = [
-    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&country=DE&maxResults=1`,
-    isbn10 && `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}&country=DE&maxResults=1`,
-    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`
+    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`,
+    isbn10 && `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn10}&maxResults=1`,
+    `https://www.googleapis.com/books/v1/volumes?q=${isbn}&maxResults=3`
   ].filter(Boolean)
 
   for (const url of tries) {
-    const data = await fetchJson(url)
-    const v = data?.items?.[0]?.volumeInfo
+    const data = await fetchJson(url, ctx)
+    const items = data?.items || []
+    if (!items.length) continue
+
+    // Bei der Freitextsuche können mehrere Bücher zurückkommen. Denjenigen
+    // Eintrag nehmen, der die gesuchte ISBN wirklich führt; sonst den ersten.
+    const matching = items.find((it) =>
+      (it.volumeInfo?.industryIdentifiers || []).some(
+        (i) => i.identifier === isbn || i.identifier === isbn10
+      )
+    )
+    const v = (matching || items[0]).volumeInfo
     if (!v) continue
     const img = v.imageLinks || {}
     const cover =
@@ -127,7 +240,7 @@ async function fromGoogle(isbn, isbn10) {
       pages: v.pageCount || null,
       language: v.language || '',
       coverUrl: cover ? cover.replace(/^http:/, 'https:').replace('&edge=curl', '') : null,
-      categories: (v.categories || []).slice(0, 2).map((c) => c.split('/').pop().trim()),
+      categories: translateCategories(v.categories),
       source: 'Google Books'
     }
   }
@@ -136,9 +249,29 @@ async function fromGoogle(isbn, isbn10) {
 
 /* Dritter Open-Library-Weg: der Ausgaben-Datensatz. Wieder ein anderer
    Bestand als die beiden übrigen — manche Bücher stehen nur hier. */
-async function fromOpenLibraryEdition(isbn) {
-  const data = await fetchJson(`https://openlibrary.org/isbn/${isbn}.json`)
+/** Open Library trägt Reihen uneinheitlich ein — "Mistborn -- bk. 3",
+    "Mistborn ; 3", "Stormlight Archive #3". Nur übernehmen, wenn sich Name
+    und Bandnummer eindeutig trennen lassen; bei Unsicherheit lieber leer
+    lassen, als etwas Falsches einzutragen. */
+function parseSeries(raw) {
+  const s = String(raw?.[0] || '').trim()
+  if (!s) return null
+  const m = s.match(/^(.+?)\s*(?:--|;|,|#)\s*(?:bk\.?|book|vol\.?|volume|band|#)?\s*(\d+(?:\.\d+)?)\s*$/i)
+  if (!m) return null
+  const name = m[1].trim()
+  const index = Number(m[2])
+  if (!name || Number.isNaN(index)) return null
+  return { series: name, seriesIndex: index }
+}
+
+async function fromOpenLibraryEdition(isbn, isbn10, ctx) {
+  // Viele Datensätze sind dort nur unter der zehnstelligen Form abgelegt.
+  let data = await fetchJson(`https://openlibrary.org/isbn/${isbn}.json`, ctx)
+  if (!data?.title && isbn10) {
+    data = await fetchJson(`https://openlibrary.org/isbn/${isbn10}.json`, ctx)
+  }
   if (!data?.title) return null
+  const series = parseSeries(data.series)
   return {
     title: data.title || '',
     subtitle: data.subtitle || '',
@@ -146,6 +279,8 @@ async function fromOpenLibraryEdition(isbn) {
     year: yearFrom(data.publish_date),
     pages: data.number_of_pages || null,
     language: OL_LANG[(data.languages?.[0]?.key || '').split('/').pop()] || '',
+    series: series?.series || '',
+    seriesIndex: series?.seriesIndex ?? null,
     coverUrl: data.covers?.[0]
       ? `https://covers.openlibrary.org/b/id/${data.covers[0]}-L.jpg`
       : null,
@@ -153,11 +288,14 @@ async function fromOpenLibraryEdition(isbn) {
   }
 }
 
-async function fromOpenLibrary(isbn) {
+async function fromOpenLibrary(isbn, isbn10, ctx) {
+  // Beide Schreibweisen in einer Anfrage — die Schnittstelle nimmt mehrere.
+  const keys = [`ISBN:${isbn}`, isbn10 && `ISBN:${isbn10}`].filter(Boolean)
   const data = await fetchJson(
-    `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`
+    `https://openlibrary.org/api/books?bibkeys=${keys.join(',')}&format=json&jscmd=data`,
+    ctx
   )
-  const v = data?.[`ISBN:${isbn}`]
+  const v = data?.[`ISBN:${isbn}`] || (isbn10 && data?.[`ISBN:${isbn10}`])
   if (!v) return null
   return {
     title: v.title || '',
@@ -175,9 +313,13 @@ async function fromOpenLibrary(isbn) {
 /* Open Library hat zwei getrennte Schnittstellen mit unterschiedlichem
    Datenbestand. Diese hier kennt oft eine Seitenzahl, wenn die andere nichts
    weiß, und liefert zusätzlich Genre-Angaben. */
-async function fromOpenLibrarySearch(isbn) {
+async function fromOpenLibrarySearch(isbn, isbn10, ctx) {
+  const fields = 'title,author_name,first_publish_year,number_of_pages_median,language,publisher,subject,cover_i'
+  // Die Suche akzeptiert beide Formen gleichzeitig (ODER-Verknüpfung).
+  const q = isbn10 ? `${isbn}+OR+${isbn10}` : isbn
   const data = await fetchJson(
-    `https://openlibrary.org/search.json?isbn=${isbn}&limit=1&fields=title,author_name,first_publish_year,number_of_pages_median,language,publisher,subject,cover_i`
+    `https://openlibrary.org/search.json?isbn=${q}&limit=1&fields=${fields}`,
+    ctx
   )
   const d = data?.docs?.[0]
   if (!d) return null
@@ -189,7 +331,7 @@ async function fromOpenLibrarySearch(isbn) {
     pages: d.number_of_pages_median || null,
     language: OL_LANG[(d.language || [])[0]] || '',
     coverUrl: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg` : null,
-    categories: (d.subject || []).slice(0, 2),
+    categories: translateCategories(d.subject),
     source: 'Open Library'
   }
 }
@@ -197,13 +339,17 @@ async function fromOpenLibrarySearch(isbn) {
 /* Apple Books als dritte Quelle. Deckt vor allem Selfpublishing-Titel ab,
    bei denen Open Library und Google oft nichts haben. Die Bilder-URL lässt
    sich von 100px auf 600px hochdrehen. */
-async function fromApple({ isbn, title, authors }) {
-  let data = isbn ? await fetchJson(`https://itunes.apple.com/lookup?isbn=${isbn}`) : null
-  // Titelsuche nur, wenn ein Titel bekannt ist — beim ersten Durchgang ist er
-  // das noch nicht, dann bleibt es bei der ISBN-Abfrage.
+async function fromApple({ isbn, title, authors }, ctx) {
+  // Achtung: E-Book-Ausgaben tragen meist eine andere ISBN als die gedruckte,
+  // die gezielte Abfrage greift deshalb oft nicht. Die Freitextsuche mit der
+  // ISBN als Suchbegriff findet trotzdem manches.
+  let data = isbn ? await fetchJson(`https://itunes.apple.com/lookup?isbn=${isbn}`, ctx) : null
+  if (!data?.results?.length && isbn) {
+    data = await fetchJson(`https://itunes.apple.com/search?term=${isbn}&entity=ebook&limit=1`, ctx)
+  }
   if (!data?.results?.length && title) {
     const term = encodeURIComponent(`${title} ${authors?.[0] || ''}`.trim())
-    data = await fetchJson(`https://itunes.apple.com/search?term=${term}&entity=ebook&limit=1`)
+    data = await fetchJson(`https://itunes.apple.com/search?term=${term}&entity=ebook&limit=1`, ctx)
   }
   const r = data?.results?.[0]
   if (!r) return null
@@ -219,10 +365,10 @@ async function fromApple({ isbn, title, authors }) {
 
 /* Wenn die ISBN-Suche Lücken lässt, nochmal über Titel und Autor suchen —
    oft ist dieselbe Ausgabe unter einer anderen ISBN vollständiger erfasst. */
-async function byTitle(title, author) {
+async function byTitle(title, author, ctx) {
   if (!title) return null
   const q = encodeURIComponent(`intitle:${title}${author ? ` inauthor:${author}` : ''}`)
-  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`)
+  const data = await fetchJson(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`, ctx)
   const hit = (data?.items || [])
     .map((i) => i.volumeInfo)
     .find((v) => v?.pageCount || v?.language)
@@ -238,35 +384,39 @@ async function byTitle(title, author) {
   }
 }
 
-/** Wie fetchJson, meldet Fehler aber statt sie zu verschlucken — für Abfragen,
-    bei denen "nichts gefunden" und "Anfrage fehlgeschlagen" nicht dasselbe sein dürfen. */
-async function fetchJsonStrict(url, timeout = 8000) {
-  const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), timeout)
-  try {
-    const res = await fetch(url, { signal: ctrl.signal })
-    if (!res.ok) throw new Error(`Antwort ${res.status}`)
-    return await res.json()
-  } finally {
-    clearTimeout(t)
-  }
-}
-
 /** Suche nach Titel/Autor statt ISBN — für Bücher ohne Barcode zur Hand. */
 export async function searchBooksByText(query) {
   const q = query.trim()
   if (!q) return []
 
-  let data
-  try {
-    data = await fetchJsonStrict(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=12&printType=books`
+  const ctx = { failures: 0 }
+  const base = 'https://www.googleapis.com/books/v1/volumes'
+
+  // Erst normal suchen. Bleibt das dünn, gezielt als Autorenname versuchen —
+  // bei einer reinen Nachnamen-Eingabe wie "Sanderson" bringt das deutlich
+  // mehr und passendere Treffer.
+  let data = await fetchJson(
+    `${base}?q=${encodeURIComponent(q)}&maxResults=20&printType=books&orderBy=relevance`,
+    ctx
+  )
+  let items = data?.items || []
+
+  if (items.length < 5) {
+    const asAuthor = await fetchJson(
+      `${base}?q=${encodeURIComponent(`inauthor:${q}`)}&maxResults=20&printType=books`,
+      ctx
     )
-  } catch {
+    const extra = asAuthor?.items || []
+    const seen = new Set(items.map((i) => i.id))
+    items = [...items, ...extra.filter((i) => !seen.has(i.id))]
+  }
+
+  // Nichts gefunden UND unterwegs ist etwas schiefgegangen: dann ist "keine
+  // Treffer" nicht vertrauenswürdig, sondern schlicht ein Fehlschlag.
+  if (!items.length && ctx.failures > 0) {
     throw new Error('Die Suche war nicht erreichbar. Nochmal versuchen?')
   }
 
-  const items = data?.items || []
   const mapped = items
     .map((it) => {
       const v = it.volumeInfo || {}
@@ -286,7 +436,7 @@ export async function searchBooksByText(query) {
         pages: v.pageCount || null,
         language: v.language || '',
         publisher: v.publisher || '',
-        categories: (v.categories || []).slice(0, 2).map((c) => c.split('/').pop().trim()),
+        categories: translateCategories(v.categories),
         thumb: cover ? cover.replace(/^http:/, 'https:') : null,
         coverUrl: (img.large || img.medium || img.thumbnail || '')
           .replace(/^http:/, 'https:')
@@ -340,7 +490,9 @@ function mergeSources({ google, olBooks, olSearch, olEdition, apple }) {
     // Cover: Open Library zuerst, weil nur die CORS-Header liefert und sich
     // damit als Datei für die Offline-Nutzung speichern lässt.
     coverUrl: pick(ob.coverUrl, oe.coverUrl, os.coverUrl, g.coverUrl, a.coverUrl),
-    categories: pick(g.categories, os.categories) || []
+    categories: pick(g.categories, os.categories) || [],
+    series: oe.series || '',
+    seriesIndex: oe.seriesIndex ?? null
   }
 }
 
@@ -357,6 +509,7 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   if (cached) return { ...cached, fromCache: true }
 
   const isbn10 = toIsbn10(isbn)
+  const ctx = { failures: 0 } // zählt endgültig fehlgeschlagene Anfragen
   const results = { google: null, olBooks: null, olSearch: null, olEdition: null, apple: null }
   const found = { google: false, olBooks: false, olSearch: false, olEdition: false, apple: false }
   let announced = false
@@ -381,15 +534,21 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   // Alle gleichzeitig — keine zweite Runde mehr, dadurch bestimmt die
   // langsamste Quelle die Gesamtdauer statt der Summe aller Quellen.
   await Promise.all([
-    track('google', fromGoogle(isbn, isbn10)),
-    track('olBooks', fromOpenLibrary(isbn)),
-    track('olSearch', fromOpenLibrarySearch(isbn)),
-    track('olEdition', fromOpenLibraryEdition(isbn)),
-    track('apple', fromApple({ isbn }))
+    track('google', fromGoogle(isbn, isbn10, ctx)),
+    track('olBooks', fromOpenLibrary(isbn, isbn10, ctx)),
+    track('olSearch', fromOpenLibrarySearch(isbn, isbn10, ctx)),
+    track('olEdition', fromOpenLibraryEdition(isbn, isbn10, ctx)),
+    track('apple', fromApple({ isbn }, ctx))
   ])
 
   const merged = mergeSources(results)
-  if (!merged.title) return { isbn13: isbn, notFound: true }
+
+  if (!merged.title) {
+    // Wichtig: Wenn Anfragen fehlgeschlagen sind, ist "nicht gefunden" nicht
+    // vertrauenswürdig — dann als Fehler melden statt fälschlich zu behaupten,
+    // das Buch sei unbekannt. Und auf keinen Fall zwischenspeichern.
+    return { isbn13: isbn, notFound: true, unreliable: ctx.failures > 0 }
+  }
 
   const sources = []
   if (found.google) sources.push('Google Books')
@@ -399,7 +558,7 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   // Letzter Ausweg, nur wenn wirklich noch etwas Wesentliches fehlt: dieselbe
   // Ausgabe ist unter einer anderen ISBN oft vollständiger erfasst.
   if (!merged.pages || !merged.coverUrl) {
-    const extra = await byTitle(merged.title, merged.authors[0])
+    const extra = await byTitle(merged.title, merged.authors[0], ctx)
     if (extra) {
       merged.pages = merged.pages || extra.pages
       merged.language = merged.language || extra.language
@@ -415,7 +574,9 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
     fallbackCoverUrl: `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`,
     source: sources.join(' + ')
   }
-  writeCache(isbn, final)
+  // Nur zwischenspeichern, wenn nichts schiefgegangen ist — sonst würde ein
+  // lückenhaftes Ergebnis für Monate festgeschrieben.
+  if (ctx.failures === 0) writeCache(isbn, final)
   return final
 }
 

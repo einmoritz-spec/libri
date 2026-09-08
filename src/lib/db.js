@@ -94,6 +94,8 @@ export function emptyBook(overrides = {}) {
     rating: null,
     notes: '',
     tags: [],
+    series: '',
+    seriesIndex: null,
     shelfRow: 0,
     shelfIndex: null,
     source: 'manual',
@@ -278,6 +280,7 @@ export async function importLibrary(payload, { replace = false } = {}) {
 /* ---------- Backup-Erinnerung ---------- */
 
 const LAST_BACKUP_KEY = 'libri:lastBackup'
+const AUTO_BACKUP_INTERVAL_DAYS = 7
 
 export function markBackupDone() {
   localStorage.setItem(LAST_BACKUP_KEY, new Date().toISOString())
@@ -287,4 +290,13 @@ export function daysSinceBackup() {
   const raw = localStorage.getItem(LAST_BACKUP_KEY)
   if (!raw) return null
   return Math.floor((Date.now() - new Date(raw).getTime()) / 86400000)
+}
+
+/** True, wenn eine automatische Sicherung fällig ist. Erst ab dem ersten
+    Buch — eine leere Bibliothek muss nicht gesichert werden. */
+export async function isAutoBackupDue() {
+  const days = daysSinceBackup()
+  if (days !== null && days < AUTO_BACKUP_INTERVAL_DAYS) return false
+  const count = await db.books.count()
+  return count > 0
 }

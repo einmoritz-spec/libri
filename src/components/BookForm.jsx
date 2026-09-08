@@ -18,6 +18,7 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
   const [enriching, setEnriching] = useState(Boolean(pending))
   const touched = useRef(new Set())
   const fileRef = useRef(null)
+  const cameraRef = useRef(null)
 
   // Nachgereichte Daten einarbeiten — aber nur in Felder, die noch leer sind
   // und die nicht von Hand geändert wurden. Getippte Korrekturen bleiben.
@@ -43,6 +44,8 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
         fill('year', extra.year)
         fill('pages', extra.pages)
         fill('language', extra.language)
+        fill('series', extra.series)
+        fill('seriesIndex', extra.seriesIndex)
         fill('spineColor', extra.spineColor)
         fill('source', extra.source)
         if (!touched.current.has('authorsText') && !next.authorsText && extra.authors?.length) {
@@ -100,6 +103,10 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       authors: authorsText.split(',').map((s) => s.trim()).filter(Boolean),
       tags: tagsText.split(',').map((s) => s.trim()).filter(Boolean),
       pages: form.pages ? Number(form.pages) : null,
+      series: (form.series || '').trim(),
+      seriesIndex: form.seriesIndex !== '' && form.seriesIndex !== null && form.seriesIndex !== undefined
+        ? Number(form.seriesIndex)
+        : null,
       year: form.year ? Number(form.year) : null,
       currentPage: form.currentPage ? Number(form.currentPage) : 0
     })
@@ -145,13 +152,22 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
           <Cover book={form} />
         </div>
         <div className="btn-row">
+          <button type="button" className="btn" onClick={() => cameraRef.current?.click()}>
+            Foto aufnehmen
+          </button>
           <button type="button" className="btn" onClick={() => fileRef.current?.click()}>
-            {form.coverBlob || form.coverUrl ? 'Anderes Bild wählen' : 'Cover hochladen'}
+            {form.coverBlob || form.coverUrl ? 'Anderes Bild wählen' : 'Aus Galerie wählen'}
           </button>
           {(form.coverBlob || form.coverUrl) && (
             <button type="button" className="btn btn-quiet" onClick={removeCover}>Entfernen</button>
           )}
         </div>
+        {/* Zwei getrennte Felder statt eines: ein bloßes accept="image/*" lässt
+            manche Handys selbst entscheiden, ob "Kamera" überhaupt als Option
+            auftaucht. Mit capture ist es erzwungen, ohne bleibt Galerie/Dateien
+            im Vordergrund — beides als eigener Knopf statt Ratespiel. */}
+        <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+          hidden onChange={pickCover} />
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickCover} />
       </div>
 
@@ -168,6 +184,19 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       <div className="field">
         <label htmlFor="f-authors">Autoren, mit Komma getrennt</label>
         <input id="f-authors" value={form.authorsText} onChange={set('authorsText')} />
+      </div>
+
+      <div className="field-pair">
+        <div className="field" style={{ flex: 2 }}>
+          <label htmlFor="f-series">Reihe</label>
+          <input id="f-series" value={form.series || ''} onChange={set('series')}
+            placeholder="z. B. Sturmlicht-Chroniken" />
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="f-series-idx">Band</label>
+          <input id="f-series-idx" type="number" inputMode="numeric" min="0" step="0.5"
+            value={form.seriesIndex ?? ''} onChange={set('seriesIndex')} />
+        </div>
       </div>
 
       <div className="field-pair">

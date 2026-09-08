@@ -7,7 +7,7 @@ import {
 } from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
 
-export default function Scan({ onFound, onExisting, onManual, notify }) {
+export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const stopRef = useRef(null)
@@ -27,12 +27,30 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
   const [textResults, setTextResults] = useState(null)
   const [textBusy, setTextBusy] = useState(false)
   const [pickBusy, setPickBusy] = useState(null)
+  const [retryIsbn, setRetryIsbn] = useState(null)
+  const [textError, setTextError] = useState(null)
+  const [continuous, setContinuous] = useState(
+    () => localStorage.getItem('libri:continuousScan') === '1'
+  )
 
   useEffect(() => {
     hasNativeDetector().then((n) => setEngine(n ? 'nativ' : 'ZXing'))
     return () => teardown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Fortlaufendes Scannen: Sobald das Formular oder die Detailansicht über
+  // diesem Bildschirm wieder zugeht, hier die Kamera von selbst neu starten,
+  // statt jedes Mal erneut "Kamera starten" antippen zu müssen.
+  const prevSheetOpen = useRef(sheetOpen)
+  useEffect(() => {
+    const wasOpen = prevSheetOpen.current
+    prevSheetOpen.current = sheetOpen
+    if (wasOpen && !sheetOpen && continuous && state === 'idle') {
+      start()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheetOpen, continuous])
 
   function teardown() {
     stopRef.current?.()
@@ -105,6 +123,7 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
   }
 
   async function resolveIsbn(raw) {
+    setRetryIsbn(null)
     try {
       const isbn = toIsbn13(raw)
       const existing = await findByIsbn(isbn)
@@ -137,6 +156,8 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
               language: partial.language,
               coverUrl: partial.coverUrl,
               tags: partial.categories || [],
+              series: partial.series || '',
+              seriesIndex: partial.seriesIndex ?? null,
               source: 'wird ergänzt…'
             }),
             false,
@@ -163,6 +184,8 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
             coverBlob,
             spineColor,
             tags: meta.categories || [],
+          series: meta.series || '',
+          seriesIndex: meta.seriesIndex ?? null,
             source: meta.source
           }
         })
@@ -174,6 +197,13 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       // Keine Quelle hatte einen Titel: leeres Formular mit vorausgefüllter ISBN.
       if (!opened) {
         if (meta.notFound) {
+          if (meta.unreliable) {
+            // Anfragen sind fehlgeschlagen — das Buch ist womöglich sehr wohl
+            // bekannt. Nicht behaupten, es gäbe es nicht.
+            setRetryIsbn(meta.isbn13)
+            notify('Abfrage fehlgeschlagen — nicht das Buch ist das Problem.')
+            return
+          }
           onFound(emptyBook({ isbn13: meta.isbn13, source: 'manual' }), true)
         } else {
           const done = await completion
@@ -197,46 +227,18 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
     setManualBusy(false)
   }
 
-  // Automatisch suchen, während getippt wird — mit kurzer Verzögerung, damit
-  // nicht bei jedem Buchstaben eine Anfrage rausgeht. Ältere Antworten, die
-  // nach einer neueren Eingabe eintreffen, werden verworfen.
-  const searchSeq = useRef(0)
-  useEffect(() => {
-    const q = textQuery.trim()
-    if (q.length < 3) {
-      setTextResults(null)
-      setTextBusy(false)
-      return
-    }
-    const seq = ++searchSeq.current
-    setTextBusy(true)
-    const timer = setTimeout(async () => {
-      try {
-        const results = await searchBooksByText(q)
-        if (seq !== searchSeq.current) return // überholte Antwort verwerfen
-        setTextResults(results)
-      } catch (e) {
-        if (seq !== searchSeq.current) return
-        notify(e?.message || 'Die Suche hat nicht geklappt.')
-        setTextResults([])
-      } finally {
-        if (seq === searchSeq.current) setTextBusy(false)
-      }
-    }, 450)
-    return () => clearTimeout(timer)
-  }, [textQuery, notify])
-
   async function submitTextSearch() {
-    if (!textQuery.trim()) return
+    const q = textQuery.trim()
+    if (!q) return
     setTextBusy(true)
+    setTextError(null)
     setTextResults(null)
     try {
-      const results = await searchBooksByText(textQuery)
+      const results = await searchBooksByText(q)
       setTextResults(results)
-      if (!results.length) notify('Nichts gefunden. Vielleicht anders schreiben?')
     } catch (e) {
-      notify(e?.message || 'Die Suche hat nicht geklappt.')
-      setTextResults([])
+      setTextError(e?.message || 'Die Suche hat nicht geklappt.')
+      setTextResults(null)
     } finally {
       setTextBusy(false)
     }
@@ -288,6 +290,21 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
 
       {error && <div className="notice warn"><p>{error}</p></div>}
 
+      <label className="continuous-toggle">
+        <input
+          type="checkbox"
+          checked={continuous}
+          onChange={(e) => {
+            setContinuous(e.target.checked)
+            localStorage.setItem('libri:continuousScan', e.target.checked ? '1' : '0')
+          }}
+        />
+        <span>
+          Fortlaufend scannen
+          <small>Kamera startet nach jedem Buch von selbst neu</small>
+        </span>
+      </label>
+
       {/* Das <video> bleibt immer im DOM — sonst hat openCamera kein Ziel zum Anhängen. */}
       <div className="viewport">
         <video ref={videoRef} muted playsInline />
@@ -333,6 +350,19 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
         </>
       )}
 
+      {retryIsbn && (
+        <div className="notice warn">
+          <p>
+            Die Abfrage für <b>{retryIsbn}</b> ist fehlgeschlagen — das heißt
+            nicht, dass das Buch unbekannt ist. Meist ist es nur eine kurzzeitige
+            Drosselung der Datenquelle.
+          </p>
+          <button className="btn btn-primary" onClick={() => resolveIsbn(retryIsbn)}>
+            Nochmal versuchen
+          </button>
+        </div>
+      )}
+
       <h2>ISBN eintippen</h2>
       <div className="progress">
         <input
@@ -354,18 +384,35 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
         <input
           className="search"
           style={{ flex: 1, width: 'auto', marginBottom: 0 }}
-          placeholder="z. B. Dungeon Crawler Carl"
+          placeholder="Sanderson, Der Name des Windes …"
           value={textQuery}
           onChange={(e) => setTextQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submitTextSearch()}
           aria-label="Titel oder Autor eingeben"
         />
-        <button className="btn" onClick={submitTextSearch} disabled={!textQuery.trim() || textBusy}>
+        <button className="btn btn-primary" onClick={submitTextSearch}
+          disabled={!textQuery.trim() || textBusy}>
           {textBusy ? <span className="spinner" /> : 'Suchen'}
         </button>
       </div>
 
-      {textResults && (
+      {textError && (
+        <div className="notice warn">
+          <p>{textError}</p>
+          <button className="btn btn-primary" onClick={submitTextSearch}>
+            Nochmal versuchen
+          </button>
+        </div>
+      )}
+
+      {textResults?.length === 0 && !textBusy && (
+        <p className="hint" style={{ textAlign: 'left' }}>
+          Keine Treffer für „{textQuery.trim()}“. Versuch es mit dem Titel oder
+          einer anderen Schreibweise.
+        </p>
+      )}
+
+      {textResults?.length > 0 && (
         <div className="search-results">
           {textResults.map((r) => (
             <button

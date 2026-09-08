@@ -63,7 +63,10 @@ export default function CoverCropper({ file, onDone, onCancel }) {
     if (!frame || !img?.naturalWidth) return null
     const fw = frame.clientWidth
     const fh = frame.clientHeight
-    const base = Math.max(fw / img.naturalWidth, fh / img.naturalHeight)
+    // "Fit" statt "Cover": bei Zoom 1 ist das ganze Foto sichtbar, nicht schon
+    // ausschnitthaft hineingezoomt. Reinzoomen und den Bildausschnitt wählen
+    // ist damit eine bewusste Handlung, kein erzwungener Startzustand.
+    const base = Math.min(fw / img.naturalWidth, fh / img.naturalHeight)
     const scale = base * zoom
     return {
       fw, fh, base, scale,
@@ -125,7 +128,7 @@ export default function CoverCropper({ file, onDone, onCancel }) {
     if (e.touches.length === 2 && pinch.current) {
       e.preventDefault()
       const factor = dist(e.touches) / pinch.current.d
-      setZoom(Math.min(4, Math.max(1, pinch.current.z * factor)))
+      setZoom(Math.min(6, Math.max(1, pinch.current.z * factor)))
     }
   }
 
@@ -201,14 +204,16 @@ export default function CoverCropper({ file, onDone, onCancel }) {
       <label className="crop-zoom">
         <span>Größe</span>
         <input
-          type="range" min="1" max="4" step="0.01"
+          type="range" min="1" max="6" step="0.01"
           value={zoom}
           onChange={(e) => setZoom(Number(e.target.value))}
           aria-label="Zoom"
         />
       </label>
 
-      <p className="hint">Zum Verschieben ziehen, mit zwei Fingern zoomen.</p>
+      <p className="hint">
+        Ganzes Foto sichtbar — hineinzoomen und verschieben, bis nur das Cover im Rahmen steht.
+      </p>
     </div>
   )
 }

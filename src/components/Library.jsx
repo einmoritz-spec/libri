@@ -12,12 +12,16 @@ const BookCard = memo(function BookCard({ book, onOpen }) {
   const pct = book.pages && book.currentPage
     ? Math.min(100, (book.currentPage / book.pages) * 100)
     : 0
+  const subline = book.series
+    ? `${book.series}${book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}`
+    : book.authors?.[0] || '—'
+
   return (
     <button className="slot" onClick={() => onOpen(book)}>
       <div className="slot-art"><Cover book={book} /></div>
       <div className="slot-caption">
         <div className="slot-title">{book.title}</div>
-        <div className="slot-author">{book.authors?.[0] || '—'}</div>
+        <div className="slot-author">{subline}</div>
         {book.status === 'reading' && (
           <div className="slot-bar"><span style={{ width: `${pct}%` }} /></div>
         )}
@@ -30,6 +34,7 @@ const SORTS = {
   addedAt: 'Zuletzt hinzugefügt',
   title: 'Titel',
   author: 'Autor',
+  series: 'Reihe',
   rating: 'Bewertung',
   year: 'Erscheinungsjahr',
   pages: 'Seitenzahl'
@@ -41,6 +46,7 @@ export default function Library({ onOpen, onScan, onManual }) {
   const [status, setStatus] = useState('all')
   const [lang, setLang] = useState('all')
   const [tag, setTag] = useState('all')
+  const [series, setSeries] = useState('all')
   const [sort, setSort] = useState('addedAt')
 
   const shown = useMemo(() => {
@@ -50,11 +56,13 @@ export default function Library({ onOpen, onScan, onManual }) {
       if (status !== 'all' && b.status !== status) return false
       if (lang !== 'all' && b.language !== lang) return false
       if (tag !== 'all' && !(b.tags || []).includes(tag)) return false
+      if (series !== 'all' && b.series !== series) return false
       if (!q) return true
       return (
         b.title.toLowerCase().includes(q) ||
         (b.authors || []).join(' ').toLowerCase().includes(q) ||
         (b.tags || []).join(' ').toLowerCase().includes(q) ||
+        (b.series || '').toLowerCase().includes(q) ||
         (b.isbn13 || '').includes(q)
       )
     })
@@ -65,10 +73,16 @@ export default function Library({ onOpen, onScan, onManual }) {
       if (sort === 'pages') return (b.pages || 0) - (a.pages || 0)
       if (sort === 'rating') return (b.rating || 0) - (a.rating || 0)
       if (sort === 'year') return (b.year || 0) - (a.year || 0)
+      if (sort === 'series') {
+        const as = a.series || '\uffff' // ohne Reihe ans Ende
+        const bs = b.series || '\uffff'
+        const c = as.localeCompare(bs, 'de')
+        return c !== 0 ? c : (a.seriesIndex || 0) - (b.seriesIndex || 0)
+      }
       return (b.addedAt || '').localeCompare(a.addedAt || '')
     })
     return list
-  }, [books, query, status, lang, tag, sort])
+  }, [books, query, status, lang, tag, series, sort])
 
   if (books === null) {
     return (
@@ -98,6 +112,9 @@ export default function Library({ onOpen, onScan, onManual }) {
     acc[b.status] = (acc[b.status] || 0) + 1
     return acc
   }, {})
+  const seriesNames = [...new Set(books.map((b) => b.series).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'de')
+  )
   const languages = [...new Set(books.map((b) => b.language).filter(Boolean))].sort()
   const tags = [...new Set(books.flatMap((b) => b.tags || []))].sort((a, b) =>
     a.localeCompare(b, 'de')
@@ -117,7 +134,7 @@ export default function Library({ onOpen, onScan, onManual }) {
       <input
         className="search"
         type="search"
-        placeholder="Titel, Autor, Schlagwort"
+        placeholder="Titel, Autor, Reihe, Schlagwort"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         aria-label="Bibliothek durchsuchen"
@@ -141,8 +158,22 @@ export default function Library({ onOpen, onScan, onManual }) {
         </select>
       </div>
 
-      {(tags.length > 0 || languages.length > 1) && (
-        <div className="filters">
+      {(seriesNames.length > 0 || tags.length > 0 || languages.length > 1) && (
+        <div className="filters-wrap">
+          {seriesNames.map((s) => (
+            <button key={s} className="chip" aria-pressed={series === s}
+              onClick={() => {
+                if (series === s) {
+                  setSeries('all')
+                } else {
+                  // Beim Antippen gleich in Lesereihenfolge zeigen.
+                  setSeries(s)
+                  setSort('series')
+                }
+              }}>
+              {s}
+            </button>
+          ))}
           {languages.length > 1 &&
             languages.map((l) => (
               <button key={l} className="chip" aria-pressed={lang === l}
