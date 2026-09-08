@@ -6,12 +6,29 @@ import { VitePWA } from 'vite-plugin-pwa'
 // auf einer eigenen Domain, ohne dass hier etwas angepasst werden muss.
 export default defineConfig({
   base: './',
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString())
+  },
   build: {
     // "Deploy from a branch" braucht das fertige Ergebnis direkt im Repo,
     // nicht nur in der Action. docs/ lässt sich in GitHub Pages als Quelle
     // auswählen (Branch: main, Ordner: /docs).
     outDir: 'docs',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // ZXing bekommt einen festen Namen, damit die Ausnahme beim Vorabladen
+        // im Service Worker zuverlässig greift.
+        manualChunks(id) {
+          if (id.includes('@zxing')) return 'zxing'
+        },
+        chunkFileNames(info) {
+          return info.name === 'zxing'
+            ? 'assets/zxing-[hash].js'
+            : 'assets/[name]-[hash].js'
+        }
+      }
+    }
   },
   plugins: [
     react(),
@@ -24,6 +41,11 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Der ZXing-Fallback wiegt gut 400 KB und wird nur auf Geräten ohne
+        // native Barcode-Erkennung gebraucht — also nicht auf Android. Deshalb
+        // nicht vorab mitladen, sondern erst bei Bedarf holen und dann behalten.
+        globIgnores: ['**/zxing*.js'],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // API-Antworten und Cover offline vorhalten
         runtimeCaching: [
           {
