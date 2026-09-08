@@ -20,7 +20,13 @@ function Bars({ rows, unit }) {
 
 export default function Stats() {
   const books = useLiveQuery(() => db.books.toArray(), [], null)
-  if (!books) return <div className="screen"><p className="hint"><span className="spinner" /></p></div>
+  if (!books) {
+    return (
+      <div className="screen">
+        <p className="hint"><span className="spinner" /> Zahlen werden geladen…</p>
+      </div>
+    )
+  }
 
   const read = books.filter((b) => b.status === 'read')
   const reading = books.filter((b) => b.status === 'reading')

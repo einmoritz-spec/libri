@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import './styles.css'
 
 // Die Update-Übernahme selbst (skipWaiting/clientsClaim + Reload) läuft über
@@ -18,9 +19,17 @@ window.addEventListener('pointerdown', () => {
 })
 
 if ('serviceWorker' in navigator) {
-  setInterval(() => {
+  const checkForUpdate = () => {
     navigator.serviceWorker.getRegistration().then((reg) => reg?.update())
-  }, 60_000)
+  }
+
+  // Vorher lief diese Prüfung jede Minute — ein ständiger Netzzugriff im
+  // Hintergrund, der die Bedienung spürbar stocken lassen kann. Sinnvoller:
+  // beim Zurückkehren zur App prüfen und sonst nur alle paar Stunden.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate()
+  })
+  setInterval(checkForUpdate, 1000 * 60 * 60 * 4)
 }
 
 // Ein Klick, der eine abgelehnte Promise auslöst, sah bisher aus wie "nichts
@@ -41,6 +50,8 @@ window.addEventListener('unhandledrejection', (e) => {
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
   </React.StrictMode>
 )

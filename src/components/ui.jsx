@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getCoverUrl } from '../lib/db'
 
 export function EmptyBookIcon() {
   return (
@@ -43,18 +44,37 @@ export function Icon({ name }) {
   )
 }
 
-/** Lädt die Bilddaten eines Covers (Blob oder URL) und gibt eine anzeigbare
-    Objekt-URL zurück. Von Cover und den Regal-Rücken gemeinsam genutzt. */
+/** Liefert die anzeigbare Adresse eines Covers.
+    Drei Fälle: ein noch nicht gespeicherter Entwurf trägt das Bild direkt bei
+    sich, ein gespeichertes Buch holt es aus der Cover-Tabelle, und sonst
+    bleibt eine entfernte Adresse. */
 export function useCoverSrc(book) {
   const [src, setSrc] = useState(null)
+
   useEffect(() => {
+    let alive = true
+
+    // Entwurf mit Bild im Arbeitsspeicher
     if (book.coverBlob instanceof Blob) {
       const url = URL.createObjectURL(book.coverBlob)
       setSrc(url)
-      return () => URL.revokeObjectURL(url)
+      return () => {
+        alive = false
+        URL.revokeObjectURL(url)
+      }
     }
+
+    if (book.id && book.hasCover) {
+      getCoverUrl(book.id).then((url) => {
+        if (alive) setSrc(url || book.coverUrl || null)
+      })
+      return () => { alive = false }
+    }
+
     setSrc(book.coverUrl || null)
-  }, [book.coverBlob, book.coverUrl])
+    return () => { alive = false }
+  }, [book.id, book.hasCover, book.coverBlob, book.coverUrl])
+
   return src
 }
 

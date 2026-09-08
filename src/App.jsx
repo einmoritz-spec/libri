@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, addBook, emptyBook } from './lib/db'
 import Library from './components/Library'
 import Scan from './components/Scan'
-import Stats from './components/Stats'
-import Settings from './components/Settings'
+// Erst laden, wenn der Tab wirklich geöffnet wird — verkleinert das, was beim
+// Start heruntergeladen und ausgeführt werden muss.
+const Stats = lazy(() => import('./components/Stats'))
+const Settings = lazy(() => import('./components/Settings'))
 import BookDetail from './components/BookDetail'
 import BookForm from './components/BookForm'
 import { Icon, Toast } from './components/ui'
+import DbGate, { useDbStatus } from './components/DbGate'
 
 const TABS = [
   { id: 'library', label: 'Bibliothek', icon: 'shelf' },
@@ -17,10 +20,12 @@ const TABS = [
 ]
 
 export default function App() {
+  const dbState = useDbStatus()
   const [tab, setTab] = useState('library')
   const [openId, setOpenId] = useState(null)
   const [draft, setDraft] = useState(null)
   const [draftUnknown, setDraftUnknown] = useState(false)
+  const [draftPending, setDraftPending] = useState(null)
   const [toast, setToast] = useState(null)
 
   const openBook = useLiveQuery(
@@ -28,6 +33,10 @@ export default function App() {
     [openId],
     undefined
   )
+
+  // Stabile Funktion: würde sie bei jedem Rendern neu entstehen, gälte für
+  // die gemerkten Buchkarten jedes Mal alles als verändert und memo liefe leer.
+  const openBookById = useCallback((b) => setOpenId(b.id), [])
 
   const notify = useCallback((message) => {
     setToast(message)
@@ -57,14 +66,20 @@ export default function App() {
     setDraft(null)
   }
 
+  // Solange die Datenbank nicht offen ist, hat die Oberfläche keine Grundlage.
+  // Der Gate zeigt in diesem Fall einen erklärten Zustand statt eines
+  // Ladekreises, der sich sonst endlos weiterdrehen würde.
+  if (dbState !== 'ready') return <DbGate state={dbState} />
+
   return (
     <div className="app">
       {tab === 'library' && (
         <Library
-          onOpen={(b) => setOpenId(b.id)}
+          onOpen={openBookById}
           onScan={() => setTab('scan')}
           onManual={() => {
             setDraftUnknown(false)
+            setDraftPending(null)
             setDraft(emptyBook())
           }}
         />
@@ -73,8 +88,9 @@ export default function App() {
       {tab === 'scan' && (
         <Scan
           notify={notify}
-          onFound={(book, unknown) => {
+          onFound={(book, unknown, pending) => {
             setDraftUnknown(unknown)
+            setDraftPending(pending || null)
             setDraft(book)
           }}
           onExisting={(book) => {
@@ -83,24 +99,31 @@ export default function App() {
           }}
           onManual={() => {
             setDraftUnknown(false)
+            setDraftPending(null)
             setDraft(emptyBook())
           }}
         />
       )}
 
-      {tab === 'stats' && <Stats />}
-      {tab === 'settings' && <Settings notify={notify} />}
+      <Suspense fallback={
+        <div className="screen"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
+      }>
+        {tab === 'stats' && <Stats />}
+        {tab === 'settings' && <Settings notify={notify} />}
+      </Suspense>
 
       {draft && (
         <BookForm
           draft={draft}
           title={draftUnknown ? 'Nichts gefunden — bitte selbst ausfüllen' : 'Stimmt das so?'}
+          pending={draftPending}
           submitLabel="Ins Regal"
           onCancel={() => setDraft(null)}
-          onSave={async (data) => {
-            await addBook(data)
+          onSave={(data) => {
+            // Sofort schließen und bestätigen; das Schreiben läuft nebenher.
             setDraft(null)
             notify(`„${data.title}“ steht im Regal`)
+            addBook(data).catch(() => notify('Speichern hat nicht geklappt.'))
           }}
         />
       )}

@@ -1,12 +1,13 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { STATUS, STATUS_ORDER } from '../lib/db'
 import { languageName, dominantColor } from '../lib/metadata'
 import { Cover } from './ui'
-import CoverCropper from './CoverCropper'
+// Der Zuschneider wird nur gebraucht, wenn wirklich ein Bild gewählt wurde.
+const CoverCropper = lazy(() => import('./CoverCropper'))
 
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'nl', 'sv', 'pl', 'ru', 'la']
 
-export default function BookForm({ draft, title, submitLabel, onSave, onCancel }) {
+export default function BookForm({ draft, title, submitLabel, onSave, onCancel, pending }) {
   const [form, setForm] = useState({
     ...draft,
     authorsText: (draft.authors || []).join(', '),
@@ -14,9 +15,62 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
   })
   const [saving, setSaving] = useState(false)
   const [cropping, setCropping] = useState(null)
+  const [enriching, setEnriching] = useState(Boolean(pending))
+  const touched = useRef(new Set())
   const fileRef = useRef(null)
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  // Nachgereichte Daten einarbeiten — aber nur in Felder, die noch leer sind
+  // und die nicht von Hand geändert wurden. Getippte Korrekturen bleiben.
+  useEffect(() => {
+    if (!pending) return
+    let alive = true
+    pending.then((extra) => {
+      if (!alive || !extra) {
+        if (alive) setEnriching(false)
+        return
+      }
+      setForm((f) => {
+        const next = { ...f }
+        const fill = (key, value) => {
+          if (value === null || value === undefined || value === '') return
+          if (touched.current.has(key)) return
+          const cur = next[key]
+          if (cur === null || cur === undefined || cur === '' || cur === 0) next[key] = value
+        }
+        fill('title', extra.title)
+        fill('subtitle', extra.subtitle)
+        fill('publisher', extra.publisher)
+        fill('year', extra.year)
+        fill('pages', extra.pages)
+        fill('language', extra.language)
+        fill('spineColor', extra.spineColor)
+        fill('source', extra.source)
+        if (!touched.current.has('authorsText') && !next.authorsText && extra.authors?.length) {
+          next.authorsText = extra.authors.join(', ')
+        }
+        if (!touched.current.has('tagsText') && !next.tagsText && extra.tags?.length) {
+          next.tagsText = extra.tags.join(', ')
+        }
+        // Cover nur übernehmen, wenn nicht schon eins ausgewählt wurde
+        if (!touched.current.has('cover')) {
+          if (extra.coverBlob) {
+            next.coverBlob = extra.coverBlob
+            next.coverUrl = null
+          } else if (extra.coverUrl && !next.coverBlob) {
+            next.coverUrl = extra.coverUrl
+          }
+        }
+        return next
+      })
+      setEnriching(false)
+    })
+    return () => { alive = false }
+  }, [pending])
+
+  const set = (k) => (e) => {
+    touched.current.add(k)
+    setForm((f) => ({ ...f, [k]: e.target.value }))
+  }
 
   function pickCover(e) {
     const file = e.target.files?.[0]
@@ -26,11 +80,13 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
 
   async function applyCrop(blob) {
     const color = await dominantColor(blob)
+    touched.current.add('cover')
     setForm((f) => ({ ...f, coverBlob: blob, coverUrl: null, spineColor: color || f.spineColor }))
     setCropping(null)
   }
 
   function removeCover() {
+    touched.current.add('cover')
     setForm((f) => ({ ...f, coverBlob: null, coverUrl: null }))
   }
 
@@ -47,16 +103,21 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
       year: form.year ? Number(form.year) : null,
       currentPage: form.currentPage ? Number(form.currentPage) : 0
     })
-    setSaving(false)
+    // Kein setSaving(false) — das Formular ist danach ohnehin geschlossen,
+    // und ein Zustandswechsel auf einer verschwindenden Ansicht bringt nichts.
   }
 
   if (cropping) {
     return (
-      <CoverCropper
-        file={cropping}
-        onDone={applyCrop}
-        onCancel={() => setCropping(null)}
-      />
+      <Suspense fallback={
+        <div className="sheet"><p className="hint"><span className="spinner" /> Bild wird vorbereitet…</p></div>
+      }>
+        <CoverCropper
+          file={cropping}
+          onDone={applyCrop}
+          onCancel={() => setCropping(null)}
+        />
+      </Suspense>
     )
   }
 
@@ -70,6 +131,13 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel }
       </div>
 
       <h2 style={{ marginTop: 0 }}>{title}</h2>
+
+      {enriching && (
+        <p className="hint" style={{ textAlign: 'left', marginTop: -4 }}>
+          <span className="spinner" /> Weitere Angaben und Cover werden noch geladen —
+          du kannst schon tippen, Getipptes bleibt erhalten.
+        </p>
+      )}
 
       <div className="field">
         <label>Cover</label>

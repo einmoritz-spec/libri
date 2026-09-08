@@ -87,7 +87,19 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
     teardown() // Barcode sitzt — die Kamera muss dafür nicht länger laufen
     setFoundIsbn(toIsbn13(raw))
     setState('found')
+
+    // Absicherung: Sollte der Abruf wider Erwarten hängen bleiben, darf der
+    // Bildschirm nicht dauerhaft im Suchzustand feststecken.
+    const guard = setTimeout(() => {
+      if (busyRef.current) {
+        busyRef.current = false
+        setState('idle')
+        notify('Das hat zu lange gedauert. Nochmal versuchen?')
+      }
+    }, 20000)
+
     await resolveIsbn(raw)
+    clearTimeout(guard)
     busyRef.current = false
     setState('idle')
   }
@@ -101,33 +113,73 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
         return
       }
 
-      const meta = await lookupIsbn(raw)
-      if (meta.notFound) {
-        onFound(emptyBook({ isbn13: meta.isbn13, source: 'manual' }), true)
-        return
+      let opened = false
+
+      // Wird erfüllt, sobald alle Quellen durch sind und das Cover geladen ist.
+      // Bewusst vorab angelegt, damit das Formular es schon mitbekommen kann,
+      // bevor überhaupt eine Quelle geantwortet hat.
+      let settle
+      const completion = new Promise((res) => { settle = res })
+
+      const enrichment = lookupIsbn(raw, {
+        onPartial: (partial) => {
+          if (opened) return
+          opened = true
+          onFound(
+            emptyBook({
+              isbn13: partial.isbn13,
+              title: partial.title,
+              subtitle: partial.subtitle,
+              authors: partial.authors,
+              publisher: partial.publisher,
+              year: partial.year,
+              pages: partial.pages,
+              language: partial.language,
+              coverUrl: partial.coverUrl,
+              tags: partial.categories || [],
+              source: 'wird ergänzt…'
+            }),
+            false,
+            completion
+          )
+        }
+      })
+
+      enrichment
+        .then(async (meta) => {
+          if (meta.notFound) return null
+          let coverBlob = await fetchCoverBlob(meta.coverUrl)
+          if (!coverBlob) coverBlob = await fetchCoverBlob(meta.fallbackCoverUrl)
+          const spineColor = await dominantColor(coverBlob)
+          return {
+            title: meta.title,
+            subtitle: meta.subtitle,
+            authors: meta.authors,
+            publisher: meta.publisher,
+            year: meta.year,
+            pages: meta.pages,
+            language: meta.language,
+            coverUrl: coverBlob ? null : meta.coverUrl,
+            coverBlob,
+            spineColor,
+            tags: meta.categories || [],
+            source: meta.source
+          }
+        })
+        .catch(() => null)
+        .then(settle) // scheitert die Ergänzung, wartet das Formular nicht endlos
+
+      const meta = await enrichment
+
+      // Keine Quelle hatte einen Titel: leeres Formular mit vorausgefüllter ISBN.
+      if (!opened) {
+        if (meta.notFound) {
+          onFound(emptyBook({ isbn13: meta.isbn13, source: 'manual' }), true)
+        } else {
+          const done = await completion
+          onFound(emptyBook({ isbn13: meta.isbn13, ...(done || {}) }), false)
+        }
       }
-
-      let coverBlob = await fetchCoverBlob(meta.coverUrl)
-      if (!coverBlob) coverBlob = await fetchCoverBlob(meta.fallbackCoverUrl)
-      const spineColor = await dominantColor(coverBlob)
-
-      onFound(
-        emptyBook({
-          isbn13: meta.isbn13,
-          title: meta.title,
-          subtitle: meta.subtitle,
-          authors: meta.authors,
-          publisher: meta.publisher,
-          year: meta.year,
-          pages: meta.pages,
-          language: meta.language,
-          coverUrl: coverBlob ? null : meta.coverUrl,
-          coverBlob,
-          spineColor,
-          source: meta.source
-        }),
-        false
-      )
     } catch (e) {
       notify(e.message || 'Der Abruf hat nicht geklappt.')
     }
@@ -145,6 +197,35 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
     setManualBusy(false)
   }
 
+  // Automatisch suchen, während getippt wird — mit kurzer Verzögerung, damit
+  // nicht bei jedem Buchstaben eine Anfrage rausgeht. Ältere Antworten, die
+  // nach einer neueren Eingabe eintreffen, werden verworfen.
+  const searchSeq = useRef(0)
+  useEffect(() => {
+    const q = textQuery.trim()
+    if (q.length < 3) {
+      setTextResults(null)
+      setTextBusy(false)
+      return
+    }
+    const seq = ++searchSeq.current
+    setTextBusy(true)
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchBooksByText(q)
+        if (seq !== searchSeq.current) return // überholte Antwort verwerfen
+        setTextResults(results)
+      } catch (e) {
+        if (seq !== searchSeq.current) return
+        notify(e?.message || 'Die Suche hat nicht geklappt.')
+        setTextResults([])
+      } finally {
+        if (seq === searchSeq.current) setTextBusy(false)
+      }
+    }, 450)
+    return () => clearTimeout(timer)
+  }, [textQuery, notify])
+
   async function submitTextSearch() {
     if (!textQuery.trim()) return
     setTextBusy(true)
@@ -153,8 +234,8 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       const results = await searchBooksByText(textQuery)
       setTextResults(results)
       if (!results.length) notify('Nichts gefunden. Vielleicht anders schreiben?')
-    } catch {
-      notify('Die Suche hat nicht geklappt.')
+    } catch (e) {
+      notify(e?.message || 'Die Suche hat nicht geklappt.')
       setTextResults([])
     } finally {
       setTextBusy(false)
@@ -185,6 +266,7 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
             coverUrl: coverBlob ? null : r.coverUrl,
             coverBlob,
             spineColor,
+            tags: r.categories || [],
             source: 'Google Books (Titelsuche)'
           }),
           false
@@ -254,7 +336,8 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       <h2>ISBN eintippen</h2>
       <div className="progress">
         <input
-          style={{ flex: 1, width: 'auto' }}
+          className="search"
+          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
           inputMode="numeric"
           placeholder="978…"
           value={manualIsbn}
@@ -269,7 +352,8 @@ export default function Scan({ onFound, onExisting, onManual, notify }) {
       <h2>Titel oder Autor suchen</h2>
       <div className="progress">
         <input
-          style={{ flex: 1, width: 'auto' }}
+          className="search"
+          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
           placeholder="z. B. Dungeon Crawler Carl"
           value={textQuery}
           onChange={(e) => setTextQuery(e.target.value)}
