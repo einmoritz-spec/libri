@@ -200,8 +200,9 @@ export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen 
           if (meta.unreliable) {
             // Anfragen sind fehlgeschlagen — das Buch ist womöglich sehr wohl
             // bekannt. Nicht behaupten, es gäbe es nicht.
+            busyRef.current = false
+            setState('idle') // erst den Suchzustand beenden, dann die Meldung
             setRetryIsbn(meta.isbn13)
-            notify('Abfrage fehlgeschlagen — nicht das Buch ist das Problem.')
             return
           }
           onFound(emptyBook({ isbn13: meta.isbn13, source: 'manual' }), true)

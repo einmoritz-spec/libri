@@ -92,8 +92,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * treten sporadisch auf und sorgten sonst dafür, dass dasselbe Buch mal
  * gefunden wurde und mal nicht.
  *
- * ctx.failures zählt endgültig fehlgeschlagene Anfragen, damit der Aufrufer
- * am Ende weiß, ob "nichts gefunden" überhaupt vertrauenswürdig ist.
+ * ctx.failures zählt endgültig fehlgeschlagene Anfragen. Wichtig: pro Quelle
+ * ein eigener Zähler (siehe lookupIsbn) — sonst würde eine einzelne dauerhaft
+ * blockierte Quelle jede Abfrage als "fehlgeschlagen" erscheinen lassen.
  */
 async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 3 } = {}) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
@@ -315,13 +316,18 @@ async function fromOpenLibrary(isbn, isbn10, ctx) {
    weiß, und liefert zusätzlich Genre-Angaben. */
 async function fromOpenLibrarySearch(isbn, isbn10, ctx) {
   const fields = 'title,author_name,first_publish_year,number_of_pages_median,language,publisher,subject,cover_i'
-  // Die Suche akzeptiert beide Formen gleichzeitig (ODER-Verknüpfung).
-  const q = isbn10 ? `${isbn}+OR+${isbn10}` : isbn
-  const data = await fetchJson(
-    `https://openlibrary.org/search.json?isbn=${q}&limit=1&fields=${fields}`,
-    ctx
-  )
-  const d = data?.docs?.[0]
+  // Das isbn-Feld nimmt genau einen Wert — eine ODER-Verknüpfung würde
+  // wörtlich als Suchbegriff gelesen und fände nie etwas. Daher nacheinander.
+  const forms = [isbn, isbn10].filter(Boolean)
+  let d = null
+  for (const form of forms) {
+    const data = await fetchJson(
+      `https://openlibrary.org/search.json?isbn=${form}&limit=1&fields=${fields}`,
+      ctx
+    )
+    d = data?.docs?.[0]
+    if (d) break
+  }
   if (!d) return null
   return {
     title: d.title || '',
@@ -509,7 +515,18 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   if (cached) return { ...cached, fromCache: true }
 
   const isbn10 = toIsbn10(isbn)
-  const ctx = { failures: 0 } // zählt endgültig fehlgeschlagene Anfragen
+
+  /* Ein eigener Zähler pro Quelle. Apple Books zum Beispiel lässt Zugriffe
+     aus dem Browser oft gar nicht zu — dann scheitert diese eine Quelle bei
+     jedem Scan, ohne dass das irgendetwas über das Buch aussagt. Mit einem
+     gemeinsamen Zähler galt deshalb bisher jede Abfrage als fehlgeschlagen. */
+  const ctxs = {
+    google: { failures: 0 },
+    olBooks: { failures: 0 },
+    olSearch: { failures: 0 },
+    olEdition: { failures: 0 },
+    apple: { failures: 0 }
+  }
   const results = { google: null, olBooks: null, olSearch: null, olEdition: null, apple: null }
   const found = { google: false, olBooks: false, olSearch: false, olEdition: false, apple: false }
   let announced = false
@@ -534,12 +551,21 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   // Alle gleichzeitig — keine zweite Runde mehr, dadurch bestimmt die
   // langsamste Quelle die Gesamtdauer statt der Summe aller Quellen.
   await Promise.all([
-    track('google', fromGoogle(isbn, isbn10, ctx)),
-    track('olBooks', fromOpenLibrary(isbn, isbn10, ctx)),
-    track('olSearch', fromOpenLibrarySearch(isbn, isbn10, ctx)),
-    track('olEdition', fromOpenLibraryEdition(isbn, isbn10, ctx)),
-    track('apple', fromApple({ isbn }, ctx))
+    track('google', fromGoogle(isbn, isbn10, ctxs.google)),
+    track('olBooks', fromOpenLibrary(isbn, isbn10, ctxs.olBooks)),
+    track('olSearch', fromOpenLibrarySearch(isbn, isbn10, ctxs.olSearch)),
+    track('olEdition', fromOpenLibraryEdition(isbn, isbn10, ctxs.olEdition)),
+    track('apple', fromApple({ isbn }, ctxs.apple))
   ])
+
+  /* Nur die tragenden Kataloge entscheiden, ob "nicht gefunden" glaubwürdig
+     ist. Apple ist ein Zusatz — fällt nur der aus, ist das kein Grund, das
+     Ergebnis anzuzweifeln. Unglaubwürdig ist es erst, wenn Google UND alle
+     Open-Library-Wege scheiterten, also gar kein Katalog geantwortet hat. */
+  const googleFailed = ctxs.google.failures > 0
+  const olFailed =
+    ctxs.olBooks.failures > 0 && ctxs.olSearch.failures > 0 && ctxs.olEdition.failures > 0
+  const allPrimaryFailed = googleFailed && olFailed
 
   const merged = mergeSources(results)
 
@@ -547,7 +573,7 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
     // Wichtig: Wenn Anfragen fehlgeschlagen sind, ist "nicht gefunden" nicht
     // vertrauenswürdig — dann als Fehler melden statt fälschlich zu behaupten,
     // das Buch sei unbekannt. Und auf keinen Fall zwischenspeichern.
-    return { isbn13: isbn, notFound: true, unreliable: ctx.failures > 0 }
+    return { isbn13: isbn, notFound: true, unreliable: allPrimaryFailed }
   }
 
   const sources = []
@@ -558,7 +584,7 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   // Letzter Ausweg, nur wenn wirklich noch etwas Wesentliches fehlt: dieselbe
   // Ausgabe ist unter einer anderen ISBN oft vollständiger erfasst.
   if (!merged.pages || !merged.coverUrl) {
-    const extra = await byTitle(merged.title, merged.authors[0], ctx)
+    const extra = await byTitle(merged.title, merged.authors[0], ctxs.google)
     if (extra) {
       merged.pages = merged.pages || extra.pages
       merged.language = merged.language || extra.language
@@ -574,9 +600,10 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
     fallbackCoverUrl: `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`,
     source: sources.join(' + ')
   }
-  // Nur zwischenspeichern, wenn nichts schiefgegangen ist — sonst würde ein
-  // lückenhaftes Ergebnis für Monate festgeschrieben.
-  if (ctx.failures === 0) writeCache(isbn, final)
+  // Zwischenspeichern, sobald die tragenden Kataloge sauber geantwortet
+  // haben. Ein Ausfall der Zusatzquelle darf das nicht verhindern — sonst
+  // würde der Zwischenspeicher praktisch nie gefüllt.
+  if (!googleFailed && !olFailed) writeCache(isbn, final)
   return final
 }
 
