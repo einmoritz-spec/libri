@@ -42,6 +42,44 @@ const SORTS = {
    nach Erscheinungsjahr etwa gäbe es kein sinnvolles "M". */
 const LETTER_SORTS = new Set(['title', 'author'])
 
+/* Diese Schlagwörter zählen als Kinder- und Bilderbuch. Bewusst dieselben
+   Begriffe, die die automatische Genre-Übersetzung beim Scannen schon
+   vergibt (siehe CATEGORY_DE in metadata.js) — ein gescanntes Bilderbuch
+   landet dadurch ohne Zutun in diesem Regal. Von Hand vergeben geht genauso,
+   einfach als Schlagwort "Bilderbuch" oder "Kinderbuch" eintragen.
+   Bewusst nicht "Jugendbuch" dabei — andere Altersgruppe. */
+const KIDS_TAGS = ['Bilderbuch', 'Kinderbuch', 'Kindersachbuch']
+
+function isKidsBook(book) {
+  return (book.tags || []).some((t) => KIDS_TAGS.includes(t))
+}
+
+function KidsShelf({ books, onOpen, onLongPress }) {
+  const kids = books.filter(isKidsBook).sort((a, b) => a.title.localeCompare(b.title, 'de'))
+
+  if (!kids.length) {
+    return (
+      <div className="empty">
+        <EmptyBookIcon />
+        <p>Noch keine Bilderbücher eingeordnet.</p>
+        <p className="hint">
+          Ein Buch bekommt beim Scannen automatisch das Schlagwort „Bilderbuch"
+          oder „Kinderbuch", wenn die Quelle es so führt. Von Hand geht's über
+          „Bearbeiten" → Schlagwörter genauso.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="cover-grid">
+      {kids.map((b) => (
+        <BookCard key={b.id} book={b} onOpen={onOpen} onLongPress={onLongPress} />
+      ))}
+    </div>
+  )
+}
+
 function letterKey(book, sort) {
   const text = sort === 'author'
     ? (book.authors?.[0] || '').split(' ').pop().trim()
@@ -230,9 +268,12 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
       <div className="view-toggle" style={{ marginBottom: 16 }}>
         <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
         <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
+        <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
       </div>
 
-      {view === 'home' ? (
+      {view === 'kids' ? (
+        <KidsShelf books={books} onOpen={onOpen} onLongPress={onLongPress} />
+      ) : view === 'home' ? (
         <Home books={books} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
       ) : (
         <>

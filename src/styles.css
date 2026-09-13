@@ -923,6 +923,19 @@ body { overflow-x: hidden; }
   animation: quick-up 0.24s var(--ease);
   max-height: 88vh;
   overflow-y: auto;
+  /* Das Fenster öffnet sich genau unter dem noch aufliegenden Finger vom
+     langen Drücken — ohne das hier greift das Betriebssystem den frisch
+     erschienenen Text darunter als Textauswahl auf. Die eigentlichen
+     Eingabefelder bleiben normal bedienbar, siehe unten. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.quick-sheet input,
+.quick-sheet textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 @keyframes quick-up {
   from { transform: translateY(22px); }
@@ -1284,3 +1297,104 @@ body { overflow-x: hidden; }
   min-height: 2px;
 }
 .spark-bar-empty { background: var(--line); }
+
+/* ---------- Cover als Hintergrund ---------- */
+
+.detail-hero {
+  position: relative;
+  margin: calc(env(safe-area-inset-top) * -1 - 12px) calc(var(--pad) * -1) 0;
+  padding: calc(env(safe-area-inset-top) + 12px) var(--pad) 22px;
+  overflow: hidden;
+  background: var(--hero-tint);
+}
+
+/* Das Cover selbst, stark verwischt und abgedunkelt — nur Farbstimmung,
+   nicht als scharfes Bild lesbar. Größer skaliert, damit der Weichzeichner
+   nicht am Rand einen hellen Saum hinterlässt. */
+.detail-hero::before {
+  content: '';
+  position: absolute;
+  inset: -10%;
+  background-image: var(--hero-img);
+  background-size: cover;
+  background-position: center 30%;
+  filter: blur(32px) saturate(1.25) brightness(0.5);
+  transform: scale(1.05);
+}
+
+/* Weicher Übergang zum normalen Seitenhintergrund, damit der Text darunter
+   nicht hart an einer Kante endet. */
+.detail-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, var(--night) 100%);
+}
+
+.detail-hero .sheet-bar,
+.detail-hero .detail-head {
+  position: relative;
+  z-index: 1;
+}
+
+/* Auf dem verdunkelten Bild braucht der Text mehr Kontrast als sonst. */
+.detail-hero .detail-title,
+.detail-hero .detail-author {
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- Fertiggelesen-Moment ---------- */
+
+.celebrate-sheet {
+  width: 100%;
+  max-width: 440px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--night);
+  border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 26px var(--pad) calc(env(safe-area-inset-bottom) + 20px);
+  box-shadow: 0 -12px 34px -8px rgba(var(--shadow-color), 0.6);
+  animation: quick-up 0.28s var(--ease);
+  text-align: center;
+}
+
+.celebrate-cover { display: flex; justify-content: center; margin-bottom: 16px; }
+.celebrate-cover img { max-height: 140px; box-shadow: 0 12px 26px -6px rgba(var(--shadow-color), 0.6); }
+
+.celebrate-eyebrow {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lamp);
+}
+.celebrate-title {
+  font-family: var(--serif);
+  font-size: 21px;
+  line-height: 1.25;
+  margin: 0 0 2px;
+}
+.celebrate-author { color: var(--dim); margin: 0 0 18px; }
+
+.celebrate-facts {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin-bottom: 22px;
+}
+.celebrate-fact { display: flex; flex-direction: column; }
+.celebrate-fact b {
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.celebrate-fact span { font-size: 11px; color: var(--dim); }
+
+.celebrate-label {
+  font-size: 13px;
+  color: var(--dim);
+  text-align: left;
+  margin: 0 0 8px;
+}

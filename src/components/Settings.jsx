@@ -14,6 +14,14 @@ export default function Settings({ notify }) {
   const [theme, setThemeState] = useState(
     () => localStorage.getItem('libri:theme') || 'dark'
   )
+  const [celebrate, setCelebrateState] = useState(
+    () => localStorage.getItem('libri:celebrate') !== '0'
+  )
+
+  function setCelebrate(on) {
+    setCelebrateState(on)
+    localStorage.setItem('libri:celebrate', on ? '1' : '0')
+  }
   const days = daysSinceBackup()
   const [diag, setDiag] = useState(null)
   const [diagBusy, setDiagBusy] = useState(false)
@@ -90,6 +98,16 @@ export default function Settings({ notify }) {
         <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
           Hell, Tageslicht
         </button>
+      </div>
+
+      <h2>Fertiggelesen-Moment</h2>
+      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+        Beim Abschließen eines Buchs kurz innehalten: Lesedauer, Buch des
+        Jahres, Bewertung und Platz für ein letztes Zitat.
+      </p>
+      <div className="view-toggle">
+        <button aria-pressed={celebrate} onClick={() => setCelebrate(true)}>An</button>
+        <button aria-pressed={!celebrate} onClick={() => setCelebrate(false)}>Aus</button>
       </div>
 
       {isIOS && !isInstalled && (

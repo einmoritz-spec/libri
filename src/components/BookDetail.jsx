@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { STATUS, setProgress, markFinished, updateBook, deleteBook } from '../lib/db'
+import { STATUS, setProgress, markFinished, updateBook, deleteBook, db } from '../lib/db'
 import { languageName } from '../lib/metadata'
-import { Cover } from './ui'
+import { Cover, useCoverSrc } from './ui'
 import BookForm from './BookForm'
 import BookNotes from './BookNotes'
 import ReadingHistory from './ReadingHistory'
+import FinishCelebration from './FinishCelebration'
 
 /* Zwischen ISO-Zeitstempel und dem, was ein Datumsfeld erwartet (JJJJ-MM-TT),
    umrechnen. Uhrzeit spielt für Lesedaten keine Rolle. */
@@ -107,25 +108,61 @@ export default function BookDetail({ book, onClose, notify }) {
     updateBook(book.id, changes).catch(() => notify('Speichern hat nicht geklappt.'))
   }
 
+  const [finishing, setFinishing] = useState(false)
+  const [celebration, setCelebration] = useState(null)
+
+  async function finishBook() {
+    const celebrateOn = localStorage.getItem('libri:celebrate') !== '0'
+    if (!celebrateOn) {
+      notify('Als gelesen abgelegt')
+      onClose()
+      markFinished(book).catch(() => notify('Speichern hat nicht geklappt.'))
+      return
+    }
+
+    setFinishing(true)
+    try {
+      await markFinished(book)
+      const year = new Date().getFullYear()
+      const readThisYear = await db.books
+        .where('status').equals('read').toArray()
+        .then((list) => list.filter((b) => b.finishedAt?.slice(0, 4) === String(year)).length)
+      setLocal((l) => ({ ...l, status: 'read', finishedAt: new Date().toISOString() }))
+      setCelebration({ nth: readThisYear })
+    } catch {
+      notify('Speichern hat nicht geklappt.')
+    } finally {
+      setFinishing(false)
+    }
+  }
+
+  const bgSrc = useCoverSrc(book)
+  const heroStyle = {
+    '--hero-img': bgSrc ? `url(${bgSrc})` : 'none',
+    '--hero-tint': book.spineColor || 'var(--raised)'
+  }
+
   return (
     <div className="sheet">
-      <div className="sheet-bar">
-        <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
-        <button className="btn btn-quiet" onClick={() => setEditing(true)}>Bearbeiten</button>
-      </div>
+      <div className="detail-hero" style={heroStyle}>
+        <div className="sheet-bar">
+          <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
+          <button className="btn btn-quiet" onClick={() => setEditing(true)}>Bearbeiten</button>
+        </div>
 
-      <div className="detail-head">
-        <Cover book={book} />
-        <div>
-          <h1 className="detail-title">{book.title}</h1>
-          {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
-          <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
-          {book.series && (
-            <p className="detail-author">
-              {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
-            </p>
-          )}
-          <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
+        <div className="detail-head">
+          <Cover book={book} />
+          <div>
+            <h1 className="detail-title">{book.title}</h1>
+            {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
+            <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
+            {book.series && (
+              <p className="detail-author">
+                {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
+              </p>
+            )}
+            <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
+          </div>
         </div>
       </div>
 
@@ -172,11 +209,9 @@ export default function BookDetail({ book, onClose, notify }) {
           </div>
 
           <div className="btn-row" style={{ marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={() => {
-              notify('Als gelesen abgelegt')
-              onClose()
-              markFinished(book).catch(() => notify('Speichern hat nicht geklappt.'))
-            }}>Fertig gelesen</button>
+            <button className="btn btn-primary" onClick={finishBook} disabled={finishing}>
+              {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
+            </button>
             {local.status !== 'reading' && (
               <button className="btn" onClick={() => apply(
                 { status: 'reading', startedAt: book.startedAt || new Date().toISOString() },
@@ -259,6 +294,16 @@ export default function BookDetail({ book, onClose, notify }) {
         <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
           Aus der Bibliothek löschen
         </button>
+      )}
+
+      {celebration && (
+        <FinishCelebration
+          book={{ ...book, ...local }}
+          nth={celebration.nth}
+          notify={notify}
+          onRate={(n) => apply({ rating: n })}
+          onDone={() => { setCelebration(null); onClose() }}
+        />
       )}
     </div>
   )
