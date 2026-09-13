@@ -17,6 +17,14 @@ export default function Settings({ notify }) {
   const [celebrate, setCelebrateState] = useState(
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
+  const [kidsTab, setKidsTabState] = useState(
+    () => localStorage.getItem('libri:kidsTab') !== '0'
+  )
+
+  function setKidsTab(on) {
+    setKidsTabState(on)
+    localStorage.setItem('libri:kidsTab', on ? '1' : '0')
+  }
 
   function setCelebrate(on) {
     setCelebrateState(on)
@@ -108,6 +116,15 @@ export default function Settings({ notify }) {
       <div className="view-toggle">
         <button aria-pressed={celebrate} onClick={() => setCelebrate(true)}>An</button>
         <button aria-pressed={!celebrate} onClick={() => setCelebrate(false)}>Aus</button>
+      </div>
+
+      <h2>Bilderbücher-Reiter</h2>
+      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+        Der dritte Schalter oben in der Bibliothek, neben Start und Alle.
+      </p>
+      <div className="view-toggle">
+        <button aria-pressed={kidsTab} onClick={() => setKidsTab(true)}>An</button>
+        <button aria-pressed={!kidsTab} onClick={() => setKidsTab(false)}>Aus</button>
       </div>
 
       {isIOS && !isInstalled && (

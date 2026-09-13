@@ -1298,51 +1298,6 @@ body { overflow-x: hidden; }
 }
 .spark-bar-empty { background: var(--line); }
 
-/* ---------- Cover als Hintergrund ---------- */
-
-.detail-hero {
-  position: relative;
-  margin: calc(env(safe-area-inset-top) * -1 - 12px) calc(var(--pad) * -1) 0;
-  padding: calc(env(safe-area-inset-top) + 12px) var(--pad) 22px;
-  overflow: hidden;
-  background: var(--hero-tint);
-}
-
-/* Das Cover selbst, stark verwischt und abgedunkelt — nur Farbstimmung,
-   nicht als scharfes Bild lesbar. Größer skaliert, damit der Weichzeichner
-   nicht am Rand einen hellen Saum hinterlässt. */
-.detail-hero::before {
-  content: '';
-  position: absolute;
-  inset: -10%;
-  background-image: var(--hero-img);
-  background-size: cover;
-  background-position: center 30%;
-  filter: blur(32px) saturate(1.25) brightness(0.5);
-  transform: scale(1.05);
-}
-
-/* Weicher Übergang zum normalen Seitenhintergrund, damit der Text darunter
-   nicht hart an einer Kante endet. */
-.detail-hero::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 0%, var(--night) 100%);
-}
-
-.detail-hero .sheet-bar,
-.detail-hero .detail-head {
-  position: relative;
-  z-index: 1;
-}
-
-/* Auf dem verdunkelten Bild braucht der Text mehr Kontrast als sonst. */
-.detail-hero .detail-title,
-.detail-hero .detail-author {
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.5);
-}
-
 /* ---------- Fertiggelesen-Moment ---------- */
 
 .celebrate-sheet {

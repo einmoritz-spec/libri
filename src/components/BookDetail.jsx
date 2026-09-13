@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { STATUS, setProgress, markFinished, updateBook, deleteBook, db } from '../lib/db'
 import { languageName } from '../lib/metadata'
-import { Cover, useCoverSrc } from './ui'
+import { Cover } from './ui'
 import BookForm from './BookForm'
 import BookNotes from './BookNotes'
 import ReadingHistory from './ReadingHistory'
@@ -64,6 +64,12 @@ export default function BookDetail({ book, onClose, notify }) {
   const saveTimer = useRef(null)
   useEffect(() => () => clearTimeout(saveTimer.current), [])
 
+  // Müssen vor jedem früheren return stehen — sonst ruft die Komponente je
+  // nach Zustand (Bearbeiten an/aus) unterschiedlich viele Hooks auf, und
+  // React bricht mit Fehler #300 ab.
+  const [finishing, setFinishing] = useState(false)
+  const [celebration, setCelebration] = useState(null)
+
   if (editing) {
     return (
       <BookForm
@@ -108,9 +114,6 @@ export default function BookDetail({ book, onClose, notify }) {
     updateBook(book.id, changes).catch(() => notify('Speichern hat nicht geklappt.'))
   }
 
-  const [finishing, setFinishing] = useState(false)
-  const [celebration, setCelebration] = useState(null)
-
   async function finishBook() {
     const celebrateOn = localStorage.getItem('libri:celebrate') !== '0'
     if (!celebrateOn) {
@@ -136,33 +139,25 @@ export default function BookDetail({ book, onClose, notify }) {
     }
   }
 
-  const bgSrc = useCoverSrc(book)
-  const heroStyle = {
-    '--hero-img': bgSrc ? `url(${bgSrc})` : 'none',
-    '--hero-tint': book.spineColor || 'var(--raised)'
-  }
-
   return (
     <div className="sheet">
-      <div className="detail-hero" style={heroStyle}>
-        <div className="sheet-bar">
-          <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
-          <button className="btn btn-quiet" onClick={() => setEditing(true)}>Bearbeiten</button>
-        </div>
+      <div className="sheet-bar">
+        <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
+        <button className="btn btn-quiet" onClick={() => setEditing(true)}>Bearbeiten</button>
+      </div>
 
-        <div className="detail-head">
-          <Cover book={book} />
-          <div>
-            <h1 className="detail-title">{book.title}</h1>
-            {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
-            <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
-            {book.series && (
-              <p className="detail-author">
-                {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
-              </p>
-            )}
-            <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
-          </div>
+      <div className="detail-head">
+        <Cover book={book} />
+        <div>
+          <h1 className="detail-title">{book.title}</h1>
+          {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
+          <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
+          {book.series && (
+            <p className="detail-author">
+              {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
+            </p>
+          )}
+          <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
         </div>
       </div>
 

@@ -144,7 +144,19 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
 
   const books = live !== undefined ? live : direct
 
+  // Bilderbücher gehören ausschließlich in ihren eigenen Reiter — für Start
+  // und Alle wird so getan, als gäbe es sie nicht.
+  const nonKidsBooks = useMemo(
+    () => (books ? books.filter((b) => !isKidsBook(b)) : books),
+    [books]
+  )
+
   const [view, setView] = useState(() => localStorage.getItem('libri:libview') || 'home')
+  const kidsTabEnabled = localStorage.getItem('libri:kidsTab') !== '0'
+  useEffect(() => {
+    if (!kidsTabEnabled && view === 'kids') setView('home')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kidsTabEnabled])
   const [density, setDensity] = useState(() => localStorage.getItem('libri:density') || 'grid')
   useEffect(() => localStorage.setItem('libri:libview', view), [view])
   useEffect(() => localStorage.setItem('libri:density', density), [density])
@@ -164,9 +176,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
   }, [])
 
   const shown = useMemo(() => {
-    if (!books) return []
+    if (!nonKidsBooks) return []
     const q = query.trim().toLowerCase()
-    let list = books.filter((b) => {
+    let list = nonKidsBooks.filter((b) => {
       if (status !== 'all' && b.status !== status) return false
       if (lang !== 'all' && b.language !== lang) return false
       if (tag !== 'all' && !(b.tags || []).includes(tag)) return false
@@ -196,7 +208,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
       return (b.addedAt || '').localeCompare(a.addedAt || '')
     })
     return list
-  }, [books, query, status, lang, tag, series, sort])
+  }, [nonKidsBooks, query, status, lang, tag, series, sort])
 
   if (loadError) {
     return (
@@ -240,15 +252,15 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
     )
   }
 
-  const counts = books.reduce((acc, b) => {
+  const counts = nonKidsBooks.reduce((acc, b) => {
     acc[b.status] = (acc[b.status] || 0) + 1
     return acc
   }, {})
-  const seriesNames = [...new Set(books.map((b) => b.series).filter(Boolean))].sort((a, b) =>
+  const seriesNames = [...new Set(nonKidsBooks.map((b) => b.series).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
-  const languages = [...new Set(books.map((b) => b.language).filter(Boolean))].sort()
-  const tags = [...new Set(books.flatMap((b) => b.tags || []))].sort((a, b) =>
+  const languages = [...new Set(nonKidsBooks.map((b) => b.language).filter(Boolean))].sort()
+  const tags = [...new Set(nonKidsBooks.flatMap((b) => b.tags || []))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
 
@@ -268,13 +280,15 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
       <div className="view-toggle" style={{ marginBottom: 16 }}>
         <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
         <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
-        <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
+        {kidsTabEnabled && (
+          <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
+        )}
       </div>
 
-      {view === 'kids' ? (
+      {view === 'kids' && kidsTabEnabled ? (
         <KidsShelf books={books} onOpen={onOpen} onLongPress={onLongPress} />
       ) : view === 'home' ? (
-        <Home books={books} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
+        <Home books={nonKidsBooks} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
       ) : (
         <>
           <input
@@ -369,7 +383,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
 
           <div className="density-row">
             <span className="count">
-              {shown.length === books.length ? `${books.length} Bücher` : `${shown.length} von ${books.length}`}
+              {shown.length === nonKidsBooks.length
+                ? `${nonKidsBooks.length} Bücher`
+                : `${shown.length} von ${nonKidsBooks.length}`}
             </span>
             <div className="view-toggle">
               <button aria-pressed={density === 'grid'} onClick={() => setDensity('grid')}>Raster</button>
