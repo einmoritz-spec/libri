@@ -3,11 +3,11 @@ import {
   openCamera, stopCamera, startDetection, torchSupported, setTorch, hasNativeDetector
 } from '../lib/scanner'
 import {
-  lookupIsbn, isBookBarcode, toIsbn13, fetchCoverBlob, dominantColor, searchBooksByText
+  lookupIsbn, isBookBarcode, toIsbn13, fetchCoverBlob, dominantColor
 } from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
 
-export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen }) {
+export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen, onBulk }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const stopRef = useRef(null)
@@ -23,12 +23,7 @@ export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen 
   const [forced, setForced] = useState(null)
   const [foundIsbn, setFoundIsbn] = useState(null)
   const [manualBusy, setManualBusy] = useState(false)
-  const [textQuery, setTextQuery] = useState('')
-  const [textResults, setTextResults] = useState(null)
-  const [textBusy, setTextBusy] = useState(false)
-  const [pickBusy, setPickBusy] = useState(null)
   const [retryIsbn, setRetryIsbn] = useState(null)
-  const [textError, setTextError] = useState(null)
   const [continuous, setContinuous] = useState(
     () => localStorage.getItem('libri:continuousScan') === '1'
   )
@@ -228,60 +223,6 @@ export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen 
     setManualBusy(false)
   }
 
-  async function submitTextSearch() {
-    const q = textQuery.trim()
-    if (!q) return
-    setTextBusy(true)
-    setTextError(null)
-    setTextResults(null)
-    try {
-      const results = await searchBooksByText(q)
-      setTextResults(results)
-    } catch (e) {
-      setTextError(e?.message || 'Die Suche hat nicht geklappt.')
-      setTextResults(null)
-    } finally {
-      setTextBusy(false)
-    }
-  }
-
-  async function pickResult(r) {
-    setPickBusy(r.key)
-    try {
-      if (r.isbn13) {
-        // Über die ISBN weiterreichen: prüft Duplikate und holt die volle,
-        // aus mehreren Quellen zusammengeführte Beschreibung wie beim Scannen.
-        await resolveIsbn(r.isbn13)
-      } else {
-        // Kein ISBN in den Suchergebnissen — Treffer direkt übernehmen.
-        let coverBlob = await fetchCoverBlob(r.coverUrl)
-        const spineColor = await dominantColor(coverBlob)
-        onFound(
-          emptyBook({
-            isbn13: null,
-            title: r.title,
-            subtitle: r.subtitle,
-            authors: r.authors,
-            publisher: r.publisher,
-            year: r.year,
-            pages: r.pages,
-            language: r.language,
-            coverUrl: coverBlob ? null : r.coverUrl,
-            coverBlob,
-            spineColor,
-            tags: r.categories || [],
-            source: 'Google Books (Titelsuche)'
-          }),
-          false
-        )
-      }
-      setTextResults(null)
-      setTextQuery('')
-    } finally {
-      setPickBusy(null)
-    }
-  }
-
   return (
     <div className="screen">
       <div className="screen-head">
@@ -380,66 +321,14 @@ export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen 
         </button>
       </div>
 
-      <h2>Titel oder Autor suchen</h2>
-      <div className="progress">
-        <input
-          className="search"
-          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
-          placeholder="Sanderson, Der Name des Windes …"
-          value={textQuery}
-          onChange={(e) => setTextQuery(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && submitTextSearch()}
-          aria-label="Titel oder Autor eingeben"
-        />
-        <button className="btn btn-primary" onClick={submitTextSearch}
-          disabled={!textQuery.trim() || textBusy}>
-          {textBusy ? <span className="spinner" /> : 'Suchen'}
-        </button>
-      </div>
+      <h2>Mehrere auf einmal</h2>
+      <p className="hint" style={{ textAlign: 'left', margin: '0 0 10px' }}>
+        Ganze Reihe oder alles von einem Autor auf einmal aufnehmen, ohne jedes
+        Buch einzeln zu scannen.
+      </p>
+      <button className="btn btn-block" onClick={onBulk}>Mehrfach-Import öffnen</button>
 
-      {textError && (
-        <div className="notice warn">
-          <p>{textError}</p>
-          <button className="btn btn-primary" onClick={submitTextSearch}>
-            Nochmal versuchen
-          </button>
-        </div>
-      )}
-
-      {textResults?.length === 0 && !textBusy && (
-        <p className="hint" style={{ textAlign: 'left' }}>
-          Keine Treffer für „{textQuery.trim()}“. Versuch es mit dem Titel oder
-          einer anderen Schreibweise.
-        </p>
-      )}
-
-      {textResults?.length > 0 && (
-        <div className="search-results">
-          {textResults.map((r) => (
-            <button
-              key={r.key}
-              className="search-result"
-              disabled={pickBusy !== null}
-              onClick={() => pickResult(r)}
-            >
-              {r.thumb ? (
-                <img src={r.thumb} alt="" />
-              ) : (
-                <span className="search-result-blank" />
-              )}
-              <span className="search-result-text">
-                <span className="search-result-title">{r.title}</span>
-                <span className="search-result-author">
-                  {[r.authors?.[0], r.year].filter(Boolean).join(' · ') || '—'}
-                </span>
-              </span>
-              {pickBusy === r.key && <span className="spinner" />}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <p className="hint" style={{ textAlign: 'left' }}>
+      <p className="hint" style={{ textAlign: 'left', marginTop: 20 }}>
         Kein Barcode auf dem Buch?{' '}
         <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onManual}>
           Von Hand anlegen

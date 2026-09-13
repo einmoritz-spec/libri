@@ -1,4 +1,5 @@
 import Dexie from 'dexie'
+import { lookupIsbn, fetchCoverBlob, dominantColor } from './metadata.js'
 
 export const STATUS = {
   wishlist: 'Wunschliste',
@@ -39,6 +40,33 @@ db.version(2)
         const { coverBlob, ...rest } = b
         await tx.table('books').put({ ...rest, hasCover: true })
       }
+    }
+  })
+
+/* Version 3: Notizen und Zitate bekommen eine eigene Tabelle.
+   Bisher gab es ein einzelnes Freitextfeld am Buch — damit ließ sich weder
+   mehreres festhalten noch eine Seitenzahl zuordnen. Vorhandener Text wandert
+   automatisch als erste Notiz herüber, damit nichts verlorengeht. */
+db.version(3)
+  .stores({
+    books: '++id, isbn13, title, status, addedAt, finishedAt, language, rating, year',
+    sessions: '++id, bookId, date',
+    covers: 'bookId',
+    notes: '++id, bookId, createdAt'
+  })
+  .upgrade(async (tx) => {
+    const books = await tx.table('books').toArray()
+    for (const b of books) {
+      const text = (b.notes || '').trim()
+      if (!text) continue
+      await tx.table('notes').add({
+        bookId: b.id,
+        type: 'note',
+        text,
+        page: null,
+        createdAt: b.addedAt || new Date().toISOString()
+      })
+      await tx.table('books').put({ ...b, notes: '' })
     }
   })
 
@@ -135,6 +163,7 @@ export async function updateBook(id, changes) {
 
 export async function deleteBook(id) {
   await db.sessions.where('bookId').equals(id).delete()
+  await db.notes.where('bookId').equals(id).delete()
   await db.covers.delete(id)
   invalidateCover(id)
   return db.books.delete(id)
@@ -242,10 +271,11 @@ export async function exportLibrary() {
   }
   return {
     format: 'libri-backup',
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     books: serialised,
-    sessions
+    sessions,
+    notes: await db.notes.toArray()
   }
 }
 
@@ -257,24 +287,174 @@ export async function importLibrary(payload, { replace = false } = {}) {
     await db.books.clear()
     await db.sessions.clear()
     await db.covers.clear()
+    await db.notes.clear()
   }
   let added = 0
   let skipped = 0
+  // Beim Einfügen bekommt jedes Buch eine neue Nummer. Notizen verweisen aber
+  // auf die alte — deshalb die Zuordnung mitführen und am Ende umschreiben.
+  const idMap = new Map()
+
   for (const raw of payload.books || []) {
     const { id, coverData, hasCover, ...rest } = raw
     if (rest.isbn13) {
       const existing = await findByIsbn(rest.isbn13)
       if (existing) {
         skipped++
+        if (id != null) idMap.set(id, existing.id)
         continue
       }
     }
     const coverBlob = coverData ? await dataUrlToBlob(coverData) : null
     // Über addBook, damit das Bild in der Cover-Tabelle landet.
-    await addBook({ ...rest, coverBlob })
+    const newId = await addBook({ ...rest, coverBlob })
+    if (id != null) idMap.set(id, newId)
     added++
   }
-  return { added, skipped }
+
+  let notesAdded = 0
+  for (const n of payload.notes || []) {
+    const bookId = idMap.get(n.bookId)
+    if (!bookId) continue // Buch nicht übernommen, Notiz wäre verwaist
+    const { id, ...rest } = n
+    await db.notes.add({ ...rest, bookId })
+    notesAdded++
+  }
+
+  return { added, skipped, notesAdded }
+}
+
+/** Ergänzt fehlende Angaben für die ganze Bibliothek: Cover, Seitenzahl,
+    Verlag, Jahr. Wird pro Buch über dessen eigene ISBN nachgeschlagen, damit
+    die Werte zur tatsächlichen Ausgabe passen und nicht zu irgendeiner.
+    Läuft bewusst langsam, damit die Quellen nicht drosseln. */
+export async function backfillCovers({ onProgress, shouldStop } = {}) {
+  const all = await db.books.toArray()
+  // Alles, wo etwas Wesentliches fehlt — nicht nur Bücher ohne Cover.
+  const missing = all.filter(
+    (b) => b.isbn13 && (!b.hasCover || !b.pages || !b.publisher || !b.year)
+  )
+
+  let filled = 0
+  let failed = 0
+
+  for (let i = 0; i < missing.length; i++) {
+    if (shouldStop?.()) break
+    const book = missing[i]
+    onProgress?.({ done: i, total: missing.length, title: book.title, filled })
+
+    try {
+      const meta = await lookupIsbn(book.isbn13)
+      if (meta.notFound) {
+        failed++
+      } else {
+        const changes = {}
+
+        // Cover nur holen, wenn wirklich keins da ist.
+        if (!book.hasCover) {
+          let blob = await fetchCoverBlob(meta.coverUrl)
+          if (!blob) blob = await fetchCoverBlob(meta.fallbackCoverUrl)
+          if (blob) {
+            changes.coverBlob = blob
+            const spineColor = await dominantColor(blob)
+            if (spineColor) changes.spineColor = spineColor
+          }
+        }
+
+        if (!book.pages && meta.pages) changes.pages = meta.pages
+        if (!book.publisher && meta.publisher) changes.publisher = meta.publisher
+        if (!book.year && meta.year) changes.year = meta.year
+        if (!book.language && meta.language) changes.language = meta.language
+
+        if (Object.keys(changes).length) {
+          await updateBook(book.id, changes)
+          filled++
+        } else {
+          failed++
+        }
+      }
+    } catch {
+      failed++
+    }
+
+    // Kurze Pause zwischen den Büchern — verhindert, dass die Quellen wegen
+    // zu vieler Anfragen dichtmachen.
+    await new Promise((r) => setTimeout(r, 350))
+  }
+
+  onProgress?.({ done: missing.length, total: missing.length, filled })
+  return { filled, failed, total: missing.length }
+}
+
+/* ---------- Notizen und Zitate ---------- */
+
+export const NOTE_TYPES = { quote: 'Zitat', note: 'Notiz' }
+
+export function notesFor(bookId) {
+  return db.notes.where('bookId').equals(bookId).toArray()
+}
+
+export async function addNote({ bookId, type, text, page }) {
+  return db.notes.add({
+    bookId,
+    type: type === 'quote' ? 'quote' : 'note',
+    text: String(text || '').trim(),
+    page: page ? Number(page) : null,
+    createdAt: new Date().toISOString()
+  })
+}
+
+export async function updateNote(id, changes) {
+  const clean = { ...changes }
+  if ('text' in clean) clean.text = String(clean.text || '').trim()
+  if ('page' in clean) clean.page = clean.page ? Number(clean.page) : null
+  return db.notes.update(id, clean)
+}
+
+export async function deleteNote(id) {
+  return db.notes.delete(id)
+}
+
+/* ---------- Leseverlauf ---------- */
+
+/**
+ * Wertet die beim Fortschritt-Eintragen aufgezeichneten Sitzungen aus:
+ * Seiten je Tag über die letzten Tage, Schnitt, und daraus eine Schätzung,
+ * wann das Buch durch ist. Diese Daten lagen bisher ungenutzt in der
+ * Datenbank.
+ */
+export async function readingHistory(book, days = 30) {
+  const rows = await db.sessions.where('bookId').equals(book.id).toArray()
+  if (!rows.length) return null
+
+  const perDay = new Map()
+  for (const r of rows) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.pages || 0))
+
+  const today = new Date()
+  const series = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setDate(d.getDate() - i)
+    const key = d.toISOString().slice(0, 10)
+    series.push({ date: key, pages: perDay.get(key) || 0 })
+  }
+
+  const activeDays = [...perDay.values()].filter((p) => p > 0)
+  const perActiveDay = activeDays.length
+    ? Math.round(activeDays.reduce((a, b) => a + b, 0) / activeDays.length)
+    : 0
+
+  const left = book.pages ? Math.max(0, book.pages - (book.currentPage || 0)) : null
+  const daysLeft = left && perActiveDay > 0 ? Math.ceil(left / perActiveDay) : null
+
+  return {
+    series,
+    perActiveDay,
+    left,
+    daysLeft,
+    totalLogged: [...perDay.values()].reduce((a, b) => a + b, 0),
+    sessionCount: rows.length
+  }
 }
 
 /* ---------- Backup-Erinnerung ---------- */

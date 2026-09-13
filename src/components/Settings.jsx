@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db } from '../lib/db'
+import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers } from '../lib/db'
+import { diagnoseSources } from '../lib/metadata'
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -14,6 +15,32 @@ export default function Settings({ notify }) {
     () => localStorage.getItem('libri:theme') || 'dark'
   )
   const days = daysSinceBackup()
+  const [diag, setDiag] = useState(null)
+  const [diagBusy, setDiagBusy] = useState(false)
+  const [diagIsbn, setDiagIsbn] = useState('')
+  const [cover, setCover] = useState(null)
+  const stopRef = useRef(false)
+
+  async function runBackfill() {
+    stopRef.current = false
+    setCover({ running: true, done: 0, total: 0, filled: 0 })
+    const res = await backfillCovers({
+      onProgress: (p) => setCover({ running: true, ...p }),
+      shouldStop: () => stopRef.current
+    })
+    setCover({ running: false, ...res })
+    notify(`${res.filled} Bücher ergänzt`)
+  }
+
+  async function runDiagnose() {
+    setDiagBusy(true)
+    setDiag(null)
+    try {
+      setDiag(await diagnoseSources(diagIsbn))
+    } finally {
+      setDiagBusy(false)
+    }
+  }
 
   function setTheme(next) {
     setThemeState(next)
@@ -104,6 +131,73 @@ export default function Settings({ notify }) {
         <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
         Vorhandene Bibliothek vorher leeren
       </label>
+
+      <h2>Fehlende Angaben ergänzen</h2>
+      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+        Ergänzt fehlende Cover, Seitenzahlen, Verlage und Jahre — für jedes
+        Buch über dessen eigene ISBN, damit die Werte zur richtigen Ausgabe
+        passen. Läuft bewusst gemächlich, damit die Datenquellen nicht
+        drosseln; bei vielen Büchern dauert das ein paar Minuten. Die App darf
+        dabei offen bleiben.
+      </p>
+      {cover?.running ? (
+        <>
+          <div className="notice">
+            <p>
+              <span className="spinner" /> {cover.done} von {cover.total}
+              {cover.title ? ` — ${cover.title}` : ''}
+            </p>
+            <p>{cover.filled} Bücher bisher ergänzt.</p>
+          </div>
+          <button className="btn" onClick={() => { stopRef.current = true }}>Abbrechen</button>
+        </>
+      ) : (
+        <>
+          <button className="btn btn-primary" onClick={runBackfill}>Angaben ergänzen</button>
+          {cover && !cover.running && (
+            <p className="hint" style={{ textAlign: 'left' }}>
+              {cover.filled} von {cover.total} ergänzt
+              {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}.
+            </p>
+          )}
+        </>
+      )}
+
+      <h2>Datenquellen prüfen</h2>
+      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+        Testet jede Quelle einzeln. Zeigt, ob eine Quelle blockiert, gedrosselt
+        oder erreichbar ist — und ob sie das Buch überhaupt kennt.
+      </p>
+      <div className="progress">
+        <input
+          className="search"
+          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
+          inputMode="numeric"
+          placeholder="ISBN (oder leer für Testbuch)"
+          value={diagIsbn}
+          onChange={(e) => setDiagIsbn(e.target.value)}
+          aria-label="ISBN zum Prüfen"
+        />
+        <button className="btn btn-primary" onClick={runDiagnose} disabled={diagBusy}>
+          {diagBusy ? <span className="spinner" /> : 'Prüfen'}
+        </button>
+      </div>
+
+      {diag && (
+        <div className="diag">
+          <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
+            Geprüft: {diag.isbn}{diag.isbn10 ? ` / ${diag.isbn10}` : ''}
+          </p>
+          {diag.results.map((r) => (
+            <div className="diag-row" key={r.name}>
+              <span className={r.ok ? 'diag-ok' : 'diag-bad'}>{r.ok ? '\u2713' : '\u2717'}</span>
+              <span className="diag-name">{r.name}</span>
+              <span className="diag-detail">{r.detail}</span>
+              <span className="diag-ms">{r.ms} ms</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <h2>Woher die Buchdaten kommen</h2>
       <p className="hint" style={{ textAlign: 'left', margin: 0 }}>

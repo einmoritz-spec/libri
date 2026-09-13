@@ -7,7 +7,7 @@
    Ergebnisse werden zwischengespeichert, damit dasselbe Buch nicht zweimal
    durchs Netz muss. */
 
-import { readCache, writeCache } from './cache'
+import { readCache, writeCache } from './cache.js'
 
 export function cleanIsbn(input) {
   return String(input || '').replace(/[^0-9Xx]/g, '').toUpperCase()
@@ -85,6 +85,38 @@ const OL_LANG = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/* Sperre bei Drosselung. Antwortet eine Quelle mit "zu viele Anfragen", ist
+   Weiterfragen das Schlechteste, was man tun kann — es verlängert die Sperre
+   nur. Deshalb: diese Quelle für eine Weile in Ruhe lassen. Ohne das
+   schaukelt sich eine kurze Drosselung zu dauerhaftem Ausfall hoch. */
+const throttledUntil = new Map()
+
+function isThrottled(url) {
+  const host = new URL(url).host
+  const until = throttledUntil.get(host)
+  if (!until) return false
+  if (Date.now() > until) {
+    throttledUntil.delete(host)
+    return false
+  }
+  return true
+}
+
+function markThrottled(url, seconds = 60) {
+  try {
+    throttledUntil.set(new URL(url).host, Date.now() + seconds * 1000)
+  } catch {}
+}
+
+export function throttleStatus() {
+  const out = {}
+  for (const [host, until] of throttledUntil) {
+    const left = Math.max(0, Math.round((until - Date.now()) / 1000))
+    if (left > 0) out[host] = left
+  }
+  return out
+}
+
 /**
  * Holt JSON und unterscheidet dabei zwei Dinge, die vorher gleich aussahen:
  * "Die Quelle kennt das Buch nicht" und "Die Anfrage ist schiefgegangen".
@@ -96,7 +128,13 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
  * ein eigener Zähler (siehe lookupIsbn) — sonst würde eine einzelne dauerhaft
  * blockierte Quelle jede Abfrage als "fehlgeschlagen" erscheinen lassen.
  */
-async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 3 } = {}) {
+async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 2 } = {}) {
+  // Quelle steckt gerade in der Sperre: gar nicht erst fragen.
+  if (isThrottled(url)) {
+    if (ctx) ctx.failures++
+    return null
+  }
+
   for (let attempt = 1; attempt <= attempts; attempt++) {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), timeout)
@@ -109,10 +147,18 @@ async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 3 } = {})
       // 404 heißt wirklich "kennt das Buch nicht" — nicht wiederholen.
       if (res.status === 404) return null
 
-      // Drosselung und Serverfehler: kurz warten und nochmal.
-      if (res.status === 429 || res.status >= 500) {
+      // Drosselung: sofort aufhören und die Quelle sperren. Weiterversuchen
+      // verlängert die Drosselung nur.
+      if (res.status === 429 || res.status === 403) {
+        markThrottled(url, 90)
+        if (ctx) ctx.failures++
+        return null
+      }
+
+      // Serverfehler: einmal nachfassen, dann aufgeben.
+      if (res.status >= 500) {
         if (attempt < attempts) {
-          await sleep(400 * attempt + Math.random() * 200)
+          await sleep(400 * attempt)
           continue
         }
         if (ctx) ctx.failures++
@@ -216,7 +262,12 @@ async function fromGoogle(isbn, isbn10, ctx) {
   ].filter(Boolean)
 
   for (const url of tries) {
+    // Sobald eine Anfrage scheitert oder die Quelle gesperrt ist, keine
+    // weiteren Varianten hinterherschicken — das verschlimmert nur die Lage.
+    const before = ctx?.failures ?? 0
     const data = await fetchJson(url, ctx)
+    if ((ctx?.failures ?? 0) > before) return null
+
     const items = data?.items || []
     if (!items.length) continue
 
@@ -391,25 +442,29 @@ async function byTitle(title, author, ctx) {
 }
 
 /** Suche nach Titel/Autor statt ISBN — für Bücher ohne Barcode zur Hand. */
-export async function searchBooksByText(query) {
+export async function searchBooksByText(query, { lang = null, max = 20 } = {}) {
   const q = query.trim()
   if (!q) return []
 
   const ctx = { failures: 0 }
   const base = 'https://www.googleapis.com/books/v1/volumes'
+  const langParam = lang ? `&langRestrict=${lang}` : ''
+  const limit = Math.min(40, max) // Google liefert höchstens 40 pro Anfrage
 
   // Erst normal suchen. Bleibt das dünn, gezielt als Autorenname versuchen —
   // bei einer reinen Nachnamen-Eingabe wie "Sanderson" bringt das deutlich
   // mehr und passendere Treffer.
   let data = await fetchJson(
-    `${base}?q=${encodeURIComponent(q)}&maxResults=20&printType=books&orderBy=relevance`,
+    `${base}?q=${encodeURIComponent(q)}&maxResults=${limit}&printType=books&orderBy=relevance${langParam}`,
     ctx
   )
   let items = data?.items || []
 
-  if (items.length < 5) {
+  // Zweiter Anlauf nur, wenn die erste Anfrage sauber durchlief — sonst
+  // rennen wir in eine Drosselung hinein.
+  if (items.length < 5 && ctx.failures === 0) {
     const asAuthor = await fetchJson(
-      `${base}?q=${encodeURIComponent(`inauthor:${q}`)}&maxResults=20&printType=books`,
+      `${base}?q=${encodeURIComponent(`inauthor:${q}`)}&maxResults=${limit}&printType=books${langParam}`,
       ctx
     )
     const extra = asAuthor?.items || []
@@ -607,6 +662,88 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
   return final
 }
 
+/**
+ * Prüft jede Datenquelle einzeln mit einer echten ISBN und meldet, was genau
+ * zurückkam. Damit lässt sich unterscheiden, ob eine Quelle blockiert,
+ * gedrosselt, unerreichbar ist oder das Buch schlicht nicht kennt.
+ */
+export async function diagnoseSources(rawIsbn) {
+  const isbn = toIsbn13(rawIsbn) || '9783442267743'
+  const isbn10 = toIsbn10(isbn)
+
+  const probes = [
+    {
+      name: 'Google Books',
+      url: `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`,
+      count: (d) => d?.totalItems ?? (d?.items?.length || 0)
+    },
+    {
+      name: 'Open Library (Bücher)',
+      url: `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`,
+      count: (d) => Object.keys(d || {}).length
+    },
+    {
+      name: 'Open Library (Suche)',
+      url: `https://openlibrary.org/search.json?isbn=${isbn}&limit=1&fields=title`,
+      count: (d) => d?.docs?.length || 0
+    },
+    {
+      name: 'Open Library (Ausgabe)',
+      url: `https://openlibrary.org/isbn/${isbn}.json`,
+      count: (d) => (d?.title ? 1 : 0)
+    },
+    {
+      name: 'Apple Books',
+      url: `https://itunes.apple.com/lookup?isbn=${isbn}`,
+      count: (d) => d?.resultCount || 0
+    }
+  ]
+
+  const results = []
+  for (const p of probes) {
+    const started = Date.now()
+    try {
+      const ctrl = new AbortController()
+      const t = setTimeout(() => ctrl.abort(), 8000)
+      const res = await fetch(p.url, { signal: ctrl.signal })
+      clearTimeout(t)
+      const ms = Date.now() - started
+
+      if (!res.ok) {
+        results.push({
+          name: p.name,
+          ok: false,
+          detail:
+            res.status === 429 || res.status === 403
+              ? `Gedrosselt (${res.status}) — zu viele Anfragen`
+              : `Fehler ${res.status}`,
+          ms
+        })
+        continue
+      }
+      const data = await res.json()
+      const n = p.count(data)
+      results.push({
+        name: p.name,
+        ok: true,
+        detail: n > 0 ? `${n} Treffer` : 'Erreichbar, kennt das Buch aber nicht',
+        ms
+      })
+    } catch (e) {
+      const ms = Date.now() - started
+      results.push({
+        name: p.name,
+        ok: false,
+        detail:
+          e?.name === 'AbortError'
+            ? 'Zeitüberschreitung — keine Antwort'
+            : 'Nicht erreichbar (vom Browser blockiert oder offline)',
+        ms
+      })
+    }
+  }
+  return { isbn, isbn10, results }
+}
 /** Lädt das Cover herunter, damit es offline verfügbar ist. Scheitert still. */
 export async function fetchCoverBlob(url) {
   if (!url) return null

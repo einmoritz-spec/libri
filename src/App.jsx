@@ -7,6 +7,8 @@ import Scan from './components/Scan'
 // Start heruntergeladen und ausgeführt werden muss.
 const Stats = lazy(() => import('./components/Stats'))
 const Settings = lazy(() => import('./components/Settings'))
+const BulkAdd = lazy(() => import('./components/BulkAdd'))
+const QuickEdit = lazy(() => import('./components/QuickEdit'))
 import BookDetail from './components/BookDetail'
 import BookForm from './components/BookForm'
 import { Icon, Toast } from './components/ui'
@@ -26,6 +28,8 @@ export default function App() {
   const [draft, setDraft] = useState(null)
   const [draftUnknown, setDraftUnknown] = useState(false)
   const [draftPending, setDraftPending] = useState(null)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [quickId, setQuickId] = useState(null)
   const [toast, setToast] = useState(null)
 
   const openBook = useLiveQuery(
@@ -34,9 +38,16 @@ export default function App() {
     undefined
   )
 
+  const quickBook = useLiveQuery(
+    () => (quickId ? db.books.get(quickId) : undefined),
+    [quickId],
+    undefined
+  )
+
   // Stabile Funktion: würde sie bei jedem Rendern neu entstehen, gälte für
   // die gemerkten Buchkarten jedes Mal alles als verändert und memo liefe leer.
   const openBookById = useCallback((b) => setOpenId(b.id), [])
+  const quickEditBook = useCallback((b) => setQuickId(b.id), [])
 
   const notify = useCallback((message) => {
     setToast(message)
@@ -50,25 +61,36 @@ export default function App() {
   useEffect(() => {
     if (dbState !== 'ready') return
     let cancelled = false
-    isAutoBackupDue().then(async (due) => {
-      if (!due || cancelled) return
-      try {
-        const data = await exportLibrary()
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `libri-${new Date().toISOString().slice(0, 10)}.json`
-        a.click()
-        URL.revokeObjectURL(url)
-        markBackupDone()
-        notify('Automatische Sicherung gespeichert')
-      } catch {
-        // Kein Alarm, wenn's diesmal nicht klappt — die Erinnerung in den
-        // Einstellungen greift als Auffangnetz, falls es öfter fehlschlägt.
-      }
-    })
-    return () => { cancelled = true }
+
+    // Bewusst verzögert: die Sicherung liest sämtliche Cover aus der Datenbank.
+    // Liefe sie sofort beim Start, konkurriert sie genau mit dem Aufbau der
+    // Bibliothek — also erst, wenn die Oberfläche längst steht.
+    const timer = setTimeout(() => {
+      isAutoBackupDue().then(async (due) => {
+        if (!due || cancelled) return
+        try {
+          const data = await exportLibrary()
+          if (cancelled) return
+          const blob = new Blob([JSON.stringify(data)], { type: 'application/json' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = `libri-${new Date().toISOString().slice(0, 10)}.json`
+          a.click()
+          URL.revokeObjectURL(url)
+          markBackupDone()
+          notify('Automatische Sicherung gespeichert')
+        } catch {
+          // Kein Alarm, wenn's diesmal nicht klappt — die Erinnerung in den
+          // Einstellungen greift als Auffangnetz.
+        }
+      })
+    }, 8000)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbState])
 
@@ -105,6 +127,7 @@ export default function App() {
       {tab === 'library' && (
         <Library
           onOpen={openBookById}
+          onLongPress={quickEditBook}
           onScan={() => setTab('scan')}
           onManual={() => {
             setDraftUnknown(false)
@@ -116,7 +139,8 @@ export default function App() {
 
       {tab === 'scan' && (
         <Scan
-          sheetOpen={Boolean(openId || draft)}
+          sheetOpen={Boolean(openId || draft || bulkOpen)}
+          onBulk={() => setBulkOpen(true)}
           notify={notify}
           onFound={(book, unknown, pending) => {
             setDraftUnknown(unknown)
@@ -141,6 +165,20 @@ export default function App() {
         {tab === 'stats' && <Stats />}
         {tab === 'settings' && <Settings notify={notify} />}
       </Suspense>
+
+      {quickBook && (
+        <Suspense fallback={null}>
+          <QuickEdit book={quickBook} onClose={() => setQuickId(null)} notify={notify} />
+        </Suspense>
+      )}
+
+      {bulkOpen && (
+        <Suspense fallback={
+          <div className="sheet"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
+        }>
+          <BulkAdd onClose={() => setBulkOpen(false)} notify={notify} />
+        </Suspense>
+      )}
 
       {draft && (
         <BookForm

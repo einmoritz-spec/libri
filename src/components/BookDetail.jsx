@@ -3,6 +3,24 @@ import { STATUS, setProgress, markFinished, updateBook, deleteBook } from '../li
 import { languageName } from '../lib/metadata'
 import { Cover } from './ui'
 import BookForm from './BookForm'
+import BookNotes from './BookNotes'
+import ReadingHistory from './ReadingHistory'
+
+/* Zwischen ISO-Zeitstempel und dem, was ein Datumsfeld erwartet (JJJJ-MM-TT),
+   umrechnen. Uhrzeit spielt für Lesedaten keine Rolle. */
+function toDateInput(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+
+function fromDateInput(value) {
+  if (!value) return null
+  // Mittags ansetzen, damit Zeitzonen das Datum nicht um einen Tag verschieben.
+  return new Date(`${value}T12:00:00`).toISOString()
+}
 
 function formatDate(iso) {
   if (!iso) return null
@@ -24,6 +42,7 @@ export default function BookDetail({ book, onClose, notify }) {
     currentPage: book.currentPage || 0,
     status: book.status,
     rating: book.rating,
+    startedAt: book.startedAt,
     finishedAt: book.finishedAt
   })
 
@@ -36,6 +55,7 @@ export default function BookDetail({ book, onClose, notify }) {
       currentPage: book.currentPage ?? l.currentPage,
       status: book.status,
       rating: book.rating,
+      startedAt: book.startedAt,
       finishedAt: book.finishedAt
     }))
   }, [book])
@@ -61,6 +81,11 @@ export default function BookDetail({ book, onClose, notify }) {
       />
     )
   }
+
+  const readingDays = local.startedAt && local.finishedAt
+    ? Math.max(0, Math.round(
+        (new Date(local.finishedAt) - new Date(local.startedAt)) / 86400000))
+    : null
 
   const page = local.currentPage
   const pct = book.pages ? Math.min(100, Math.round((page / book.pages) * 100)) : 0
@@ -176,11 +201,34 @@ export default function BookDetail({ book, onClose, notify }) {
               </button>
             ))}
           </div>
-          {local.finishedAt && (
-            <p className="hint" style={{ textAlign: 'left' }}>
-              Gelesen am {formatDate(local.finishedAt)}
+          <h2>Gelesen von … bis</h2>
+          <p className="hint" style={{ textAlign: 'left', margin: '0 0 10px' }}>
+            Nachträglich anpassbar — wichtig für die Statistik, wenn du ein Buch
+            schon vor längerem gelesen hast.
+          </p>
+          <div className="field-pair">
+            <div className="field">
+              <label htmlFor="d-start">Angefangen</label>
+              <input id="d-start" type="date" max={toDateInput(local.finishedAt) || undefined}
+                value={toDateInput(local.startedAt)}
+                onChange={(e) => apply({ startedAt: fromDateInput(e.target.value) })} />
+            </div>
+            <div className="field">
+              <label htmlFor="d-end">Beendet</label>
+              <input id="d-end" type="date"
+                value={toDateInput(local.finishedAt)}
+                onChange={(e) => apply({ finishedAt: fromDateInput(e.target.value) })} />
+            </div>
+          </div>
+          {readingDays !== null && (
+            <p className="hint" style={{ textAlign: 'left', marginTop: -4 }}>
+              {readingDays === 0 ? 'An einem Tag gelesen' : `${readingDays} Tage gelesen`}
+              {book.pages && readingDays > 0
+                ? ` · ${Math.round(book.pages / (readingDays + 1))} Seiten am Tag`
+                : ''}
             </p>
           )}
+
           <button className="btn" style={{ marginTop: 8 }} onClick={() => apply(
             { status: 'owned', finishedAt: null },
             'Zurück ins Regal'
@@ -188,12 +236,9 @@ export default function BookDetail({ book, onClose, notify }) {
         </>
       )}
 
-      {book.notes && (
-        <>
-          <h2>Notizen</h2>
-          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{book.notes}</p>
-        </>
-      )}
+      <ReadingHistory book={book} />
+
+      <BookNotes book={book} notify={notify} />
 
       <h2>Entfernen</h2>
       {confirmDelete ? (

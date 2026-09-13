@@ -101,6 +101,13 @@ export function Cover({ book, className }) {
       alt={`Cover von ${book.title}`}
       loading="lazy"
       onError={() => setBroken(true)}
+      onLoad={(e) => {
+        // Open Library antwortet bei fehlendem Cover nicht mit einem Fehler,
+        // sondern mit einem leeren 1x1-Pixel und Erfolgsmeldung. Für den
+        // Browser ist das ein geladenes Bild, onError greift also nie — ohne
+        // diese Prüfung bleibt an der Stelle einfach eine Lücke.
+        if (e.target.naturalWidth <= 2 || e.target.naturalHeight <= 2) setBroken(true)
+      }}
     />
   )
 }

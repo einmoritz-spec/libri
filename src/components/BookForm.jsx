@@ -243,11 +243,6 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
           placeholder="Krimi, Verliehen, Signiert" />
       </div>
 
-      <div className="field">
-        <label htmlFor="f-notes">Notizen</label>
-        <textarea id="f-notes" value={form.notes || ''} onChange={set('notes')} />
-      </div>
-
       {form.isbn13 && (
         <p className="hint" style={{ textAlign: 'left' }}>ISBN {form.isbn13}</p>
       )}
