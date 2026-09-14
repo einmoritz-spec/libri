@@ -1244,29 +1244,27 @@ body { overflow-x: hidden; }
   border: 0;
   border-left: 3px solid var(--lamp);
   border-radius: 0;
-  padding: 6px 14px 12px 18px;
+  padding: 10px 14px 12px 18px;
 }
-.note-quote::before {
-  content: '\201E';
-  display: block;
-  font-family: var(--serif);
-  font-size: 34px;
-  line-height: 1;
-  color: var(--lamp);
-  opacity: 0.4;
-  margin-bottom: -8px;
-}
+/* Beide Anführungszeichen bewusst gleich behandelt — selbe Größe, selbe
+   Farbe, direkt im Textfluss statt eins davon groß und freistehend. Als Teil
+   des Texts können sie sich dadurch nie überlappen, ganz gleich wie kurz
+   oder lang das Zitat ist. */
 .note-quote .note-text {
   font-family: var(--serif);
   font-size: 15.5px;
   line-height: 1.5;
   font-style: italic;
 }
+.note-quote .note-text::before {
+  content: '\201E';
+  font-style: normal;
+  color: var(--lamp);
+}
 .note-quote .note-text::after {
   content: '\201C';
   font-style: normal;
   color: var(--lamp);
-  opacity: 0.7;
 }
 
 .note-text {
