@@ -7,7 +7,7 @@ import {
 } from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
 
-export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen, onBulk }) {
+export default function Scan({ onFound, onExisting, onManual, onWishlist, notify, sheetOpen, onBulk }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const stopRef = useRef(null)
@@ -332,6 +332,12 @@ export default function Scan({ onFound, onExisting, onManual, notify, sheetOpen,
         Kein Barcode auf dem Buch?{' '}
         <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onManual}>
           Von Hand anlegen
+        </button>
+      </p>
+      <p className="hint" style={{ textAlign: 'left', marginTop: 4 }}>
+        Noch nicht im Besitz?{' '}
+        <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onWishlist}>
+          Auf die Wunschliste
         </button>
       </p>
     </div>

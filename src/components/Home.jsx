@@ -8,6 +8,7 @@ import { EmptyBookIcon } from './ui'
 
 function buildSections(books) {
   const reading = books.filter((b) => b.status === 'reading')
+  const wishlist = books.filter((b) => b.status === 'wishlist')
 
   const seriesMap = new Map()
   for (const b of books) {
@@ -22,16 +23,24 @@ function buildSections(books) {
 
   // Der jeweils nächste noch nicht begonnene Band — weder gelesen noch
   // gerade in Arbeit, sonst würde "als Nächstes" auf den Band zeigen, der
-  // schon oben unter "Lese ich gerade" steht.
+  // schon oben unter "Lese ich gerade" steht. Auch kein Wunschlisten-Eintrag:
+  // ein Buch, das du noch gar nicht besitzt, ist nicht als Nächstes dran,
+  // dafür gibt es den eigenen Wunschlisten-Abschnitt.
   const upNext = []
   for (const [, list] of seriesList) {
-    const next = list.find((b) => b.status !== 'read' && b.status !== 'reading')
+    const next = list.find(
+      (b) => b.status !== 'read' && b.status !== 'reading' && b.status !== 'wishlist'
+    )
     if (next) upNext.push(next)
   }
 
-  const standalone = books.filter((b) => !b.series)
+  // Wer schon oben unter "Lese ich gerade" oder "Wunschliste" steht, muss
+  // hier nicht noch einmal auftauchen.
+  const standalone = books.filter(
+    (b) => !b.series && b.status !== 'reading' && b.status !== 'wishlist'
+  )
 
-  return { reading, upNext, seriesList, standalone }
+  return { reading, wishlist, upNext, seriesList, standalone }
 }
 
 function Shelf({ title, sub, books, onOpen, onLongPress, badge }) {
@@ -53,7 +62,7 @@ function Shelf({ title, sub, books, onOpen, onLongPress, badge }) {
 }
 
 export default function Home({ books, onOpen, onLongPress, onJumpToSeries }) {
-  const { reading, upNext, seriesList, standalone } = useMemo(
+  const { reading, wishlist, upNext, seriesList, standalone } = useMemo(
     () => buildSections(books),
     [books]
   )
@@ -74,6 +83,11 @@ export default function Home({ books, onOpen, onLongPress, onJumpToSeries }) {
       <Shelf
         title="Als Nächstes dran" books={upNext} onOpen={onOpen} onLongPress={onLongPress}
         badge={(b) => b.seriesIndex ? `Band ${b.seriesIndex}` : null}
+      />
+
+      <Shelf
+        title="Wunschliste" sub={wishlist.length ? `${wishlist.length}` : null}
+        books={wishlist} onOpen={onOpen} onLongPress={onLongPress}
       />
 
       {seriesList.map(([name, list]) => {

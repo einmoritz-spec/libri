@@ -70,7 +70,11 @@ export default function Stats() {
     const owned = books.filter((b) => b.status !== 'wishlist')
     const unread = owned.filter((b) => b.status === 'owned')
 
-    const withDate = read.filter((b) => b.finishedAt)
+    // Nur bestätigte Daten zählen — ein automatisch beim Abhaken gesetztes
+    // Datum ist bei einem einzelnen, in Echtzeit fertiggelesenen Buch korrekt,
+    // würde beim Nachtragen vieler alter Bücher auf einmal aber alles auf
+    // einen Tag zusammenstauchen. Siehe BookDetail: "Gelesen von … bis".
+    const withDate = read.filter((b) => b.finishedAt && b.datesConfirmed)
     const years = [...new Set(withDate.map((b) => Number(b.finishedAt.slice(0, 4))))]
       .sort((a, b) => b - a)
 
@@ -85,7 +89,7 @@ export default function Stats() {
 
     // Lesedauer nur für Bücher, bei denen beide Daten gepflegt sind.
     const durations = read
-      .filter((b) => b.startedAt && b.finishedAt)
+      .filter((b) => b.startedAt && b.finishedAt && b.datesConfirmed)
       .map((b) => ({
         book: b,
         days: Math.max(1, Math.round(
@@ -240,9 +244,9 @@ export default function Stats() {
       {d.undated > 0 && (
         <div className="notice" style={{ marginTop: 18 }}>
           <p>
-            Bei {d.undated} gelesenen {d.undated === 1 ? 'Buch' : 'Büchern'} fehlt das
-            Lesedatum — die tauchen im Jahresverlauf nicht auf. Nachtragen kannst du
-            es im Buch unter „Gelesen von … bis".
+            Bei {d.undated} gelesenen {d.undated === 1 ? 'Buch' : 'Büchern'} ist das Datum
+            noch nicht bestätigt — die tauchen im Jahresverlauf nicht auf. Im Buch unter
+            „Gelesen von … bis" einmal bestätigen oder ändern, dann zählt es mit.
           </p>
         </div>
       )}

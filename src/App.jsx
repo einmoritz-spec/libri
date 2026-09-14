@@ -156,6 +156,11 @@ export default function App() {
             setDraftPending(null)
             setDraft(emptyBook())
           }}
+          onWishlist={() => {
+            setDraftUnknown(false)
+            setDraftPending(null)
+            setDraft(emptyBook({ status: 'wishlist' }))
+          }}
         />
       )}
 

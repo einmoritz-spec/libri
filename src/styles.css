@@ -474,6 +474,7 @@ h2 {
 }
 .badge.reading { border-color: var(--lamp); color: var(--lamp); background: var(--lamp-wash); }
 .badge.read { border-color: var(--leaf); color: var(--leaf); background: var(--leaf-wash); }
+.badge.wishlist { border-style: dashed; color: var(--dim); }
 
 .field { margin-bottom: 14px; }
 .field label {
@@ -1232,13 +1233,28 @@ body { overflow-x: hidden; }
 
 /* Ein Zitat ist der Text des Buchs, keine eigene Bemerkung — deshalb in der
    Serifenschrift des Titels, eingerückt und mit Zierzeichen. */
+/* Ein Zitat ist der Text des Buchs, keine eigene Bemerkung — deshalb in der
+   Serifenschrift des Titels, eingerückt und mit Zierzeichen. Das große „
+   bekommt eine eigene Zeile über dem Text statt einer freihändig platzierten
+   Position — sonst legt es sich bei kurzen Zitaten über den Text, wie hier
+   geschehen. Ein negativer Abstand darunter zieht es nur optisch näher heran,
+   ohne dass sich beide Blöcke berühren. */
 .note-quote {
   background: none;
   border: 0;
   border-left: 3px solid var(--lamp);
   border-radius: 0;
-  padding-left: 16px;
-  position: relative;
+  padding: 6px 14px 12px 18px;
+}
+.note-quote::before {
+  content: '\201E';
+  display: block;
+  font-family: var(--serif);
+  font-size: 34px;
+  line-height: 1;
+  color: var(--lamp);
+  opacity: 0.4;
+  margin-bottom: -8px;
 }
 .note-quote .note-text {
   font-family: var(--serif);
@@ -1246,16 +1262,11 @@ body { overflow-x: hidden; }
   line-height: 1.5;
   font-style: italic;
 }
-.note-quote::before {
-  content: '\201E';
-  position: absolute;
-  left: 10px;
-  top: 2px;
-  font-family: var(--serif);
-  font-size: 30px;
+.note-quote .note-text::after {
+  content: '\201C';
+  font-style: normal;
   color: var(--lamp);
-  opacity: 0.35;
-  line-height: 1;
+  opacity: 0.7;
 }
 
 .note-text {
@@ -1353,3 +1364,49 @@ body { overflow-x: hidden; }
   text-align: left;
   margin: 0 0 8px;
 }
+
+/* ---------- Aufklappbare Einstellungs-Abschnitte ---------- */
+
+.settings-section {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.settings-section summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--serif);
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+.settings-section summary::-webkit-details-marker { display: none; }
+
+/* Eigener Pfeil statt des Browser-Standarddreiecks, dreht sich beim Öffnen. */
+.settings-section summary::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--dim);
+  border-bottom: 2px solid var(--dim);
+  transform: rotate(-45deg);
+  transition: transform 0.18s var(--ease);
+  flex: none;
+  margin-left: 12px;
+}
+.settings-section[open] summary::after { transform: rotate(45deg); }
+
+.settings-section-body {
+  padding: 4px 16px 18px;
+  border-top: 1px solid var(--line);
+}
+.settings-section-body h2:first-child { margin-top: 14px; }
+
+.settings-section-danger { border-color: var(--alarm); }
+.settings-section-danger summary { color: var(--alarm); }
+.settings-section-danger summary::after { border-color: var(--alarm); }

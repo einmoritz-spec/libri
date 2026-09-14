@@ -8,6 +8,20 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 const isInstalled = window.matchMedia('(display-mode: standalone)').matches ||
   window.navigator.standalone === true
 
+/** Ein aufklappbarer Abschnitt — natives <details>, damit sich niemand um
+    Auf/Zu-Zustand kümmern muss und es auch ganz ohne JavaScript bedienbar
+    bliebe. Die "Gefahrenzone" bleibt bewusst standardmäßig zu, damit man
+    nicht aus Versehen darüber stolpert. */
+function Section({ title, defaultOpen, danger, children }) {
+  return (
+    <details className={danger ? 'settings-section settings-section-danger' : 'settings-section'}
+      open={defaultOpen}>
+      <summary>{title}</summary>
+      <div className="settings-section-body">{children}</div>
+    </details>
+  )
+}
+
 export default function Settings({ notify }) {
   const fileRef = useRef(null)
   const [replace, setReplace] = useState(false)
@@ -98,35 +112,6 @@ export default function Settings({ notify }) {
     <div className="screen">
       <div className="screen-head"><h1 className="wordmark">Einstellungen</h1></div>
 
-      <h2 style={{ marginTop: 0 }}>Erscheinungsbild</h2>
-      <div className="view-toggle">
-        <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
-          Dunkel, Lampenlicht
-        </button>
-        <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
-          Hell, Tageslicht
-        </button>
-      </div>
-
-      <h2>Fertiggelesen-Moment</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Beim Abschließen eines Buchs kurz innehalten: Lesedauer, Buch des
-        Jahres, Bewertung und Platz für ein letztes Zitat.
-      </p>
-      <div className="view-toggle">
-        <button aria-pressed={celebrate} onClick={() => setCelebrate(true)}>An</button>
-        <button aria-pressed={!celebrate} onClick={() => setCelebrate(false)}>Aus</button>
-      </div>
-
-      <h2>Bilderbücher-Reiter</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Der dritte Schalter oben in der Bibliothek, neben Start und Alle.
-      </p>
-      <div className="view-toggle">
-        <button aria-pressed={kidsTab} onClick={() => setKidsTab(true)}>An</button>
-        <button aria-pressed={!kidsTab} onClick={() => setKidsTab(false)}>Aus</button>
-      </div>
-
       {isIOS && !isInstalled && (
         <div className="notice warn">
           <p><b>Wichtig auf dem iPhone.</b> Safari räumt die Daten einer Website nach
@@ -142,106 +127,147 @@ export default function Settings({ notify }) {
         </div>
       )}
 
-      <h2>Sicherung</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Alle Bücher liegen nur auf diesem Gerät. Die Sicherungsdatei enthält auch die Cover
-        und lässt sich auf einem anderen Gerät wieder einlesen.
-      </p>
-      <div className="btn-row">
-        <button className="btn btn-primary" onClick={doExport}>Sicherung herunterladen</button>
-        <button className="btn" onClick={() => fileRef.current?.click()}>Sicherung einlesen</button>
-      </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="application/json,.json"
-        hidden
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) doImport(f)
-          e.target.value = ''
-        }}
-      />
-      <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 14 }}>
-        <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-        Vorhandene Bibliothek vorher leeren
-      </label>
-
-      <h2>Fehlende Angaben ergänzen</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Ergänzt fehlende Cover, Seitenzahlen, Verlage und Jahre — für jedes
-        Buch über dessen eigene ISBN, damit die Werte zur richtigen Ausgabe
-        passen. Läuft bewusst gemächlich, damit die Datenquellen nicht
-        drosseln; bei vielen Büchern dauert das ein paar Minuten. Die App darf
-        dabei offen bleiben.
-      </p>
-      {cover?.running ? (
-        <>
-          <div className="notice">
-            <p>
-              <span className="spinner" /> {cover.done} von {cover.total}
-              {cover.title ? ` — ${cover.title}` : ''}
-            </p>
-            <p>{cover.filled} Bücher bisher ergänzt.</p>
-          </div>
-          <button className="btn" onClick={() => { stopRef.current = true }}>Abbrechen</button>
-        </>
-      ) : (
-        <>
-          <button className="btn btn-primary" onClick={runBackfill}>Angaben ergänzen</button>
-          {cover && !cover.running && (
-            <p className="hint" style={{ textAlign: 'left' }}>
-              {cover.filled} von {cover.total} ergänzt
-              {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}.
-            </p>
-          )}
-        </>
-      )}
-
-      <h2>Datenquellen prüfen</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Testet jede Quelle einzeln. Zeigt, ob eine Quelle blockiert, gedrosselt
-        oder erreichbar ist — und ob sie das Buch überhaupt kennt.
-      </p>
-      <div className="progress">
-        <input
-          className="search"
-          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
-          inputMode="numeric"
-          placeholder="ISBN (oder leer für Testbuch)"
-          value={diagIsbn}
-          onChange={(e) => setDiagIsbn(e.target.value)}
-          aria-label="ISBN zum Prüfen"
-        />
-        <button className="btn btn-primary" onClick={runDiagnose} disabled={diagBusy}>
-          {diagBusy ? <span className="spinner" /> : 'Prüfen'}
-        </button>
-      </div>
-
-      {diag && (
-        <div className="diag">
-          <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
-            Geprüft: {diag.isbn}{diag.isbn10 ? ` / ${diag.isbn10}` : ''}
-          </p>
-          {diag.results.map((r) => (
-            <div className="diag-row" key={r.name}>
-              <span className={r.ok ? 'diag-ok' : 'diag-bad'}>{r.ok ? '\u2713' : '\u2717'}</span>
-              <span className="diag-name">{r.name}</span>
-              <span className="diag-detail">{r.detail}</span>
-              <span className="diag-ms">{r.ms} ms</span>
-            </div>
-          ))}
+      <Section title="Darstellung & Verhalten" defaultOpen>
+        <h2 style={{ marginTop: 0 }}>Erscheinungsbild</h2>
+        <div className="view-toggle">
+          <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
+            Dunkel, Lampenlicht
+          </button>
+          <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
+            Hell, Tageslicht
+          </button>
         </div>
-      )}
 
-      <h2>Woher die Buchdaten kommen</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: 0 }}>
-        Nach dem Scan werden Google Books und Open Library gefragt und die Angaben
-        zusammengeführt. Fehlt etwas, kannst du jedes Feld selbst nachtragen.
-      </p>
+        <h2>Fertiggelesen-Moment</h2>
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Beim Abschließen eines Buchs kurz innehalten: Lesedauer, Buch des
+          Jahres, Bewertung und Platz für ein letztes Zitat.
+        </p>
+        <div className="view-toggle">
+          <button aria-pressed={celebrate} onClick={() => setCelebrate(true)}>An</button>
+          <button aria-pressed={!celebrate} onClick={() => setCelebrate(false)}>Aus</button>
+        </div>
 
-      <h2>Alles löschen</h2>
-      <button className="btn btn-danger" onClick={wipe}>Bibliothek leeren</button>
+        <h2>Bilderbücher-Reiter</h2>
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Der dritte Schalter oben in der Bibliothek, neben Start und Alle.
+        </p>
+        <div className="view-toggle">
+          <button aria-pressed={kidsTab} onClick={() => setKidsTab(true)}>An</button>
+          <button aria-pressed={!kidsTab} onClick={() => setKidsTab(false)}>Aus</button>
+        </div>
+      </Section>
+
+      <Section title="Sicherung">
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Alle Bücher liegen nur auf diesem Gerät. Die Sicherungsdatei enthält auch die Cover
+          und lässt sich auf einem anderen Gerät wieder einlesen.
+        </p>
+        <div className="btn-row">
+          <button className="btn btn-primary" onClick={doExport}>Sicherung herunterladen</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}>Sicherung einlesen</button>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0]
+            if (f) doImport(f)
+            e.target.value = ''
+          }}
+        />
+        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 14 }}>
+          <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
+          Vorhandene Bibliothek vorher leeren
+        </label>
+      </Section>
+
+      <Section title="Fehlende Angaben ergänzen">
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Ergänzt fehlende Cover, Seitenzahlen, Verlage und Jahre — für jedes
+          Buch über dessen eigene ISBN, damit die Werte zur richtigen Ausgabe
+          passen. Läuft bewusst gemächlich, damit die Datenquellen nicht
+          drosseln; bei vielen Büchern dauert das ein paar Minuten. Die App darf
+          dabei offen bleiben.
+        </p>
+        {cover?.running ? (
+          <>
+            <div className="notice">
+              <p>
+                <span className="spinner" /> {cover.done} von {cover.total}
+                {cover.title ? ` — ${cover.title}` : ''}
+              </p>
+              <p>{cover.filled} Bücher bisher ergänzt.</p>
+            </div>
+            <button className="btn" onClick={() => { stopRef.current = true }}>Abbrechen</button>
+          </>
+        ) : (
+          <>
+            <button className="btn btn-primary" onClick={runBackfill}>Angaben ergänzen</button>
+            {cover && !cover.running && (
+              <p className="hint" style={{ textAlign: 'left' }}>
+                {cover.filled} von {cover.total} ergänzt
+                {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}.
+              </p>
+            )}
+          </>
+        )}
+      </Section>
+
+      <Section title="Datenquellen">
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Nach dem Scan werden Google Books und Open Library gefragt und die
+          Angaben zusammengeführt. Fehlt etwas, kannst du jedes Feld selbst
+          nachtragen.
+        </p>
+
+        <h2>Quellen einzeln prüfen</h2>
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Zeigt, ob eine Quelle blockiert, gedrosselt oder erreichbar ist — und
+          ob sie das Buch überhaupt kennt.
+        </p>
+        <div className="progress">
+          <input
+            className="search"
+            style={{ flex: 1, width: 'auto', marginBottom: 0 }}
+            inputMode="numeric"
+            placeholder="ISBN (oder leer für Testbuch)"
+            value={diagIsbn}
+            onChange={(e) => setDiagIsbn(e.target.value)}
+            aria-label="ISBN zum Prüfen"
+          />
+          <button className="btn btn-primary" onClick={runDiagnose} disabled={diagBusy}>
+            {diagBusy ? <span className="spinner" /> : 'Prüfen'}
+          </button>
+        </div>
+
+        {diag && (
+          <div className="diag">
+            <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
+              Geprüft: {diag.isbn}{diag.isbn10 ? ` / ${diag.isbn10}` : ''}
+            </p>
+            {diag.results.map((r) => (
+              <div className="diag-row" key={r.name}>
+                <span className={r.ok ? 'diag-ok' : 'diag-bad'}>{r.ok ? '\u2713' : '\u2717'}</span>
+                <span className="diag-name">{r.name}</span>
+                <span className="diag-detail">{r.detail}</span>
+                <span className="diag-ms">{r.ms} ms</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Gefahrenzone" danger>
+        <h2 style={{ marginTop: 0 }}>Alles löschen</h2>
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+          Entfernt alle Bücher unwiderruflich von diesem Gerät. Eine Sicherung
+          davor lässt sich später wieder einlesen.
+        </p>
+        <button className="btn btn-danger" onClick={wipe}>Bibliothek leeren</button>
+      </Section>
 
       <p className="hint" style={{ textAlign: 'left', marginTop: 28 }}>
         Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE')}

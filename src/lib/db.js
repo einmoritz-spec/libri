@@ -124,6 +124,13 @@ export function emptyBook(overrides = {}) {
     tags: [],
     series: '',
     seriesIndex: null,
+    // Nur bestätigte Daten zählen für die Statistik. "Fertig gelesen" und das
+    // Erreichen der letzten Seite setzen automatisch das heutige Datum — beim
+    // einzelnen Buch in Echtzeit korrekt, aber wenn viele alte Bücher auf
+    // einmal nachgetragen werden, würde das die Statistik auf einen einzigen
+    // Tag zusammenstauchen. Erst ein bestätigtes oder von Hand gesetztes
+    // Datum fließt in Diagramme und Lesetempo ein.
+    datesConfirmed: false,
     shelfRow: 0,
     shelfIndex: null,
     source: 'manual',
@@ -213,6 +220,7 @@ export async function setProgress(book, page) {
   if (book.pages && p >= book.pages) {
     changes.status = 'read'
     changes.finishedAt = today
+    changes.datesConfirmed = false // automatisch gesetzt — zählt erst nach Bestätigung
   }
 
   const delta = p - (book.currentPage || 0)
@@ -230,7 +238,8 @@ export async function markFinished(book) {
     status: 'read',
     currentPage: book.pages || book.currentPage,
     finishedAt: new Date().toISOString(),
-    startedAt: book.startedAt || new Date().toISOString()
+    startedAt: book.startedAt || new Date().toISOString(),
+    datesConfirmed: false // automatisch gesetzt — zählt erst nach Bestätigung
   })
 }
 

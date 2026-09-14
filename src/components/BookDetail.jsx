@@ -44,7 +44,8 @@ export default function BookDetail({ book, onClose, notify }) {
     status: book.status,
     rating: book.rating,
     startedAt: book.startedAt,
-    finishedAt: book.finishedAt
+    finishedAt: book.finishedAt,
+    datesConfirmed: book.datesConfirmed
   })
 
   // Änderungen von außen übernehmen, ohne gerade Getipptes zu überschreiben.
@@ -57,7 +58,8 @@ export default function BookDetail({ book, onClose, notify }) {
       status: book.status,
       rating: book.rating,
       startedAt: book.startedAt,
-      finishedAt: book.finishedAt
+      finishedAt: book.finishedAt,
+      datesConfirmed: book.datesConfirmed
     }))
   }, [book])
 
@@ -168,7 +170,20 @@ export default function BookDetail({ book, onClose, notify }) {
         {book.publisher && <span>{book.publisher}</span>}
       </div>
 
-      {local.status !== 'read' && (
+      {local.status === 'wishlist' && (
+        <>
+          <h2>Auf der Wunschliste</h2>
+          <p className="hint" style={{ textAlign: 'left', margin: '0 0 14px' }}>
+            Noch nicht im Regal. Sobald du es hast, einfach umbuchen.
+          </p>
+          <button className="btn btn-primary" onClick={() => apply(
+            { status: 'owned' },
+            'Ab ins Regal'
+          )}>Jetzt besorgt</button>
+        </>
+      )}
+
+      {local.status !== 'read' && local.status !== 'wishlist' && (
         <>
           <h2>Fortschritt</h2>
           {book.pages ? (
@@ -241,13 +256,17 @@ export default function BookDetail({ book, onClose, notify }) {
               <label htmlFor="d-start">Angefangen</label>
               <input id="d-start" type="date" max={toDateInput(local.finishedAt) || undefined}
                 value={toDateInput(local.startedAt)}
-                onChange={(e) => apply({ startedAt: fromDateInput(e.target.value) })} />
+                onChange={(e) => apply({
+                  startedAt: fromDateInput(e.target.value), datesConfirmed: true
+                })} />
             </div>
             <div className="field">
               <label htmlFor="d-end">Beendet</label>
               <input id="d-end" type="date"
                 value={toDateInput(local.finishedAt)}
-                onChange={(e) => apply({ finishedAt: fromDateInput(e.target.value) })} />
+                onChange={(e) => apply({
+                  finishedAt: fromDateInput(e.target.value), datesConfirmed: true
+                })} />
             </div>
           </div>
           {readingDays !== null && (
@@ -257,6 +276,20 @@ export default function BookDetail({ book, onClose, notify }) {
                 ? ` · ${Math.round(book.pages / (readingDays + 1))} Seiten am Tag`
                 : ''}
             </p>
+          )}
+
+          {local.finishedAt && !local.datesConfirmed && (
+            <div className="notice" style={{ marginTop: 10 }}>
+              <p>
+                Dieses Datum wurde automatisch beim Abhaken gesetzt und zählt
+                deshalb noch nicht in der Statistik — sonst würden mehrere an
+                einem Tag nachgetragene Bücher die Zahlen verfälschen.
+              </p>
+              <button className="btn btn-primary" onClick={() => apply(
+                { datesConfirmed: true },
+                'Zählt jetzt in der Statistik'
+              )}>Datum stimmt — für Statistik übernehmen</button>
+            </div>
           )}
 
           <button className="btn" style={{ marginTop: 8 }} onClick={() => apply(
