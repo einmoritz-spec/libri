@@ -5,6 +5,7 @@ import { Cover } from './ui'
 import BookForm from './BookForm'
 import BookNotes from './BookNotes'
 import ReadingHistory from './ReadingHistory'
+import SessionLog from './SessionLog'
 import FinishCelebration from './FinishCelebration'
 
 /* Zwischen ISO-Zeitstempel und dem, was ein Datumsfeld erwartet (JJJJ-MM-TT),
@@ -300,6 +301,8 @@ export default function BookDetail({ book, onClose, notify }) {
       )}
 
       <ReadingHistory book={book} />
+
+      <SessionLog book={book} notify={notify} />
 
       <BookNotes book={book} notify={notify} />
 

@@ -1408,3 +1408,87 @@ body { overflow-x: hidden; }
 .settings-section-danger { border-color: var(--alarm); }
 .settings-section-danger summary { color: var(--alarm); }
 .settings-section-danger summary::after { border-color: var(--alarm); }
+
+/* ---------- Zitate-Suche: Quellen-Verweis in den Suchergebnissen ---------- */
+
+.note-source {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--lamp);
+  font-size: 11.5px;
+  text-align: left;
+}
+
+/* ---------- Lesejahr-Rückblick ---------- */
+
+.review { padding-top: 8px; }
+
+.review-eyebrow {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.review-year {
+  font-family: var(--serif);
+  font-size: 44px;
+  margin: 0 0 22px;
+  color: var(--lamp);
+}
+
+.review-row { display: flex; gap: 10px; margin-bottom: 10px; }
+
+.review-card {
+  flex: 1;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.review-card b {
+  font-family: var(--serif);
+  font-size: 30px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.review-card span { font-size: 12px; color: var(--dim); }
+
+.review-hero {
+  background: var(--lamp-wash);
+  border-color: var(--lamp);
+  margin-bottom: 10px;
+}
+.review-hero b { font-size: 40px; color: var(--lamp); }
+.review-hero span { color: var(--paper); opacity: 0.75; }
+
+.review-book {
+  width: 100%;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: left;
+}
+.review-book img,
+.review-book .slot-blank { width: 52px; height: auto; flex: none; }
+.review-book div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.review-book-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.review-book strong {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.review-book > div > span:last-child { font-size: 12.5px; color: var(--dim); }

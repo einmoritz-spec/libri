@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { db } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
+import NotesSearch from './NotesSearch'
+import YearReview from './YearReview'
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
@@ -48,7 +50,9 @@ function MonthChart({ values, unit }) {
   )
 }
 
-export default function Stats() {
+export default function Stats({ onOpenBook }) {
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [reviewOpen, setReviewOpen] = useState(false)
   // Wie in der Bibliothek: zusätzlich direkt lesen, damit die Anzeige nicht
   // allein von der Live-Abfrage abhängt.
   const live = useLiveQuery(() => db.books.toArray(), [], undefined)
@@ -59,6 +63,17 @@ export default function Stats() {
     return () => { alive = false }
   }, [])
   const books = live !== undefined ? live : direct
+
+  // Lesesitzungen — für Tageszeit, Wochentag und Lesesträhne. Getrennt von
+  // den Büchern geladen, da unabhängig verfügbar sein soll.
+  const sessLive = useLiveQuery(() => db.sessions.toArray(), [], undefined)
+  const [sessDirect, setSessDirect] = useState(undefined)
+  useEffect(() => {
+    let alive = true
+    db.sessions.toArray().then((r) => alive && setSessDirect(r)).catch(() => alive && setSessDirect([]))
+    return () => { alive = false }
+  }, [])
+  const sessions = sessLive !== undefined ? sessLive : sessDirect
 
   const [year, setYear] = useState(new Date().getFullYear())
 
@@ -137,6 +152,64 @@ export default function Stats() {
     }
   }, [books, year])
 
+  const timeData = useMemo(() => {
+    if (!sessions || !sessions.length) return null
+    const withTime = sessions.filter((s) => s.at)
+    if (!withTime.length) return null
+
+    const dayparts = [
+      ['Morgens', (h) => h >= 5 && h < 11],
+      ['Mittags', (h) => h >= 11 && h < 14],
+      ['Nachmittags', (h) => h >= 14 && h < 18],
+      ['Abends', (h) => h >= 18 && h < 22],
+      ['Nachts', (h) => h >= 22 || h < 5]
+    ]
+    const byDaypart = dayparts.map(([label]) => [label, 0])
+    for (const s of withTime) {
+      const h = new Date(s.at).getHours()
+      const idx = dayparts.findIndex(([, test]) => test(h))
+      if (idx >= 0) byDaypart[idx][1] += s.pages || 0
+    }
+
+    const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+    const byWeekday = WEEKDAYS.map((l) => [l, 0])
+    for (const s of withTime) {
+      const jsDay = new Date(s.at).getDay() // 0 = Sonntag
+      const idx = jsDay === 0 ? 6 : jsDay - 1
+      byWeekday[idx][1] += s.pages || 0
+    }
+
+    const topDaypart = byDaypart.reduce((a, b) => (b[1] > a[1] ? b : a))
+    const topWeekday = byWeekday.reduce((a, b) => (b[1] > a[1] ? b : a))
+
+    // Lesesträhne: aufeinanderfolgende Tage mit mindestens einer Sitzung,
+    // unabhängig vom Buch.
+    const days = [...new Set(sessions.map((s) => s.date))].sort()
+    let longest = 0, current = 0, run = 0
+    let prev = null
+    for (const d of days) {
+      if (prev) {
+        const gap = Math.round((new Date(d) - new Date(prev)) / 86400000)
+        run = gap === 1 ? run + 1 : 1
+      } else {
+        run = 1
+      }
+      longest = Math.max(longest, run)
+      prev = d
+    }
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const yesterdayStr = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const lastDay = days[days.length - 1]
+    if (lastDay === todayStr || lastDay === yesterdayStr) current = run
+
+    return {
+      byDaypart, byWeekday, longest, current,
+      topDaypart: topDaypart[1] > 0 ? topDaypart[0] : null,
+      topWeekday: topWeekday[1] > 0 ? topWeekday[0] : null,
+      untimed: sessions.length - withTime.length
+    }
+  }, [sessions])
+
   if (!books) {
     return (
       <div className="screen">
@@ -162,7 +235,12 @@ export default function Stats() {
 
   return (
     <div className="screen">
-      <div className="screen-head"><h1 className="wordmark">Statistik</h1></div>
+      <div className="screen-head">
+        <h1 className="wordmark">Statistik</h1>
+        <button className="btn btn-quiet" onClick={() => setNotesOpen(true)}>Zitate &amp; Notizen</button>
+      </div>
+
+      {notesOpen && <NotesSearch onClose={() => setNotesOpen(false)} onOpenBook={onOpenBook} />}
 
       <div className="stat-row">
         <div className="stat"><b>{d.total}</b><span>Bücher</span></div>
@@ -190,6 +268,14 @@ export default function Stats() {
               ))}
             </div>
           </div>
+
+          <button className="btn btn-block" style={{ marginBottom: 14 }} onClick={() => setReviewOpen(true)}>
+            Dein Lesejahr {year} ansehen →
+          </button>
+
+          {reviewOpen && (
+            <YearReview books={books} year={year} onClose={() => setReviewOpen(false)} onOpenBook={onOpenBook} />
+          )}
 
           <div className="stat-row" style={{ marginBottom: 14 }}>
             <div className="stat"><b>{d.inYear.length}</b><span>Bücher {year}</span></div>
@@ -255,6 +341,51 @@ export default function Stats() {
         <>
           <h2>Gelesen pro Jahr</h2>
           <Bars rows={d.yearRows} />
+        </>
+      )}
+
+      {timeData && (
+        <>
+          <h2>Wann du liest</h2>
+          {(timeData.longest > 0) && (
+            <div className="facts-list" style={{ marginBottom: 16 }}>
+              {timeData.current > 1 && (
+                <div className="fact-row">
+                  <span>Aktuelle Lesesträhne</span>
+                  <b>{timeData.current} Tage am Stück</b>
+                </div>
+              )}
+              <div className="fact-row">
+                <span>Längste Lesesträhne</span>
+                <b>{timeData.longest} {timeData.longest === 1 ? 'Tag' : 'Tage'}</b>
+              </div>
+              {timeData.topDaypart && (
+                <div className="fact-row">
+                  <span>Liest du am liebsten</span>
+                  <b>{timeData.topDaypart}</b>
+                </div>
+              )}
+              {timeData.topWeekday && (
+                <div className="fact-row">
+                  <span>Stärkster Wochentag</span>
+                  <b>{timeData.topWeekday}</b>
+                </div>
+              )}
+            </div>
+          )}
+
+          <p className="filter-label" style={{ marginBottom: 4 }}>Seiten nach Tageszeit</p>
+          <Bars rows={timeData.byDaypart} unit=" Seiten" />
+
+          <p className="filter-label" style={{ margin: '18px 0 4px' }}>Seiten nach Wochentag</p>
+          <Bars rows={timeData.byWeekday} unit=" Seiten" />
+
+          {timeData.untimed > 0 && (
+            <p className="hint" style={{ textAlign: 'left', marginTop: 10 }}>
+              {timeData.untimed} ältere {timeData.untimed === 1 ? 'Eintrag zählt' : 'Einträge zählen'}{' '}
+              hier nicht mit — die Uhrzeit wird erst seit diesem Update mitgespeichert.
+            </p>
+          )}
         </>
       )}
 

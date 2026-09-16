@@ -227,7 +227,7 @@ export async function setProgress(book, page) {
 
   return db.transaction('rw', db.books, db.sessions, async () => {
     if (delta > 0) {
-      await db.sessions.add({ bookId: book.id, date: today.slice(0, 10), pages: delta })
+      await db.sessions.add({ bookId: book.id, date: today.slice(0, 10), at: today, pages: delta })
     }
     await db.books.update(book.id, changes)
   })
@@ -422,6 +422,37 @@ export async function updateNote(id, changes) {
 
 export async function deleteNote(id) {
   return db.notes.delete(id)
+}
+
+/* ---------- Einzelne Lesesitzungen ---------- */
+
+/** Sitzungen eines Buchs, neueste zuerst — zum Nachtragen und Korrigieren.
+    Bewusst getrennt von der aktuellen Seite des Buchs: eine Sitzung zu
+    bearbeiten verschiebt nicht, wo du gerade liest, sondern nur, wofür der
+    Tag in der Statistik gutgeschrieben wird. */
+export async function sessionsFor(bookId) {
+  const rows = await db.sessions.where('bookId').equals(bookId).toArray()
+  return rows.sort((a, b) => b.date.localeCompare(a.date) || (b.at || '').localeCompare(a.at || ''))
+}
+
+export async function addSession({ bookId, date, pages }) {
+  return db.sessions.add({
+    bookId,
+    date,
+    at: `${date}T12:00:00.000Z`, // keine Uhrzeit abgefragt, Mittag als neutraler Platzhalter
+    pages: Math.max(0, Math.round(Number(pages) || 0))
+  })
+}
+
+export async function updateSession(id, changes) {
+  const clean = { ...changes }
+  if ('date' in clean) clean.at = `${clean.date}T12:00:00.000Z`
+  if ('pages' in clean) clean.pages = Math.max(0, Math.round(Number(clean.pages) || 0))
+  return db.sessions.update(id, clean)
+}
+
+export async function deleteSession(id) {
+  return db.sessions.delete(id)
 }
 
 /* ---------- Leseverlauf ---------- */

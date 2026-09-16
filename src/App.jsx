@@ -167,7 +167,7 @@ export default function App() {
       <Suspense fallback={
         <div className="screen"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
       }>
-        {tab === 'stats' && <Stats />}
+        {tab === 'stats' && <Stats onOpenBook={openBookById} />}
         {tab === 'settings' && <Settings notify={notify} />}
       </Suspense>
 
