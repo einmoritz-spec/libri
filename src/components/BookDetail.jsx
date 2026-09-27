@@ -230,11 +230,9 @@ export default function BookDetail({ book, onClose, notify }) {
 
       {local.status !== 'read' && local.status !== 'wishlist' && (
         <>
-          <h2>Fortschritt</h2>
           {book.pages ? (
             <>
-              <div className="track"><span style={{ width: `${pct}%` }} /></div>
-              <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+              <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
                 Seite {page} von {book.pages} — {pct}%
               </p>
               <input
@@ -242,11 +240,9 @@ export default function BookDetail({ book, onClose, notify }) {
                 className="page-slider"
                 type="range" min="0" max={book.pages} value={page}
                 onChange={(e) => previewPage(Number(e.target.value))}
+                style={{ '--fill': `${pct}%` }}
                 aria-label="Aktuelle Seite"
               />
-              <p className="hint" style={{ textAlign: 'left', margin: '6px 0 0' }}>
-                Schwer genau zu treffen? Seitenzahl unten eintippen und bestätigen.
-              </p>
             </>
           ) : (
             <p className="hint" style={{ textAlign: 'left' }}>
@@ -254,8 +250,9 @@ export default function BookDetail({ book, onClose, notify }) {
             </p>
           )}
 
-          <div className="progress" style={{ marginTop: 14 }}>
+          <div className="btn-row" style={{ marginTop: 14 }}>
             <input
+              className="page-input"
               type="number" inputMode="numeric" min="0" max={book.pages || undefined}
               value={pageInputActive ? pageInput : page}
               placeholder="Seite"
@@ -268,9 +265,6 @@ export default function BookDetail({ book, onClose, notify }) {
             <button className="btn" onMouseDown={(e) => e.preventDefault()} onClick={confirmPageInput}>
               Seite merken
             </button>
-          </div>
-
-          <div className="btn-row" style={{ marginTop: 16 }}>
             <button className="btn btn-primary" onClick={finishBook} disabled={finishing}>
               {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
             </button>
@@ -357,9 +351,8 @@ export default function BookDetail({ book, onClose, notify }) {
 
       <BookNotes book={book} notify={notify} />
 
-      <h2>Entfernen</h2>
       {confirmDelete ? (
-        <div className="notice warn">
+        <div className="notice warn" style={{ marginTop: 28 }}>
           <p>„{book.title}“ wird endgültig aus der Bibliothek gelöscht.</p>
           <div className="btn-row">
             <button className="btn btn-danger" onClick={() => {
@@ -373,7 +366,7 @@ export default function BookDetail({ book, onClose, notify }) {
           </div>
         </div>
       ) : (
-        <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+        <button className="btn btn-danger" style={{ marginTop: 28 }} onClick={() => setConfirmDelete(true)}>
           Aus der Bibliothek löschen
         </button>
       )}

@@ -106,7 +106,7 @@ export default function BookNotes({ book, notify }) {
         <p className="hint" style={{ textAlign: 'left' }}><span className="spinner" /></p>
       ) : sorted.length === 0 && !adding ? (
         <p className="hint" style={{ textAlign: 'left', margin: 0 }}>
-          Noch nichts festgehalten. Zitate und Gedanken zum Buch landen hier.
+          Noch nichts festgehalten.
         </p>
       ) : (
         <div className="note-list">

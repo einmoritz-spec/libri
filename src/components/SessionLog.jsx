@@ -58,9 +58,6 @@ export default function SessionLog({ book, notify }) {
           <button className="btn btn-quiet" onClick={() => setAdding(true)}>+ Nachtragen</button>
         )}
       </div>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-        Ändert nur, wofür ein Tag in der Statistik zählt — nicht deine aktuelle Seite.
-      </p>
 
       {adding && (
         <Editor

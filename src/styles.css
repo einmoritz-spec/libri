@@ -504,15 +504,6 @@ h2 {
 }
 .progress input { width: 96px; text-align: center; }
 
-.track {
-  height: 6px;
-  background: var(--line);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-.track span { display: block; height: 100%; background: var(--lamp); }
-
 /* ---------- Statistik ---------- */
 
 .stat-row {
@@ -1505,10 +1496,17 @@ body { overflow-x: hidden; }
   background: transparent;
   margin: 4px 0;
 }
+/* Der Regler zeigt den Fortschritt jetzt selbst an — kein separater,
+   nicht anfassbarer Balken mehr darüber. --fill kommt als Inline-Custom-
+   Property vom Komponenten-Code (aktuelle Seite in Prozent). */
 .page-slider::-webkit-slider-runnable-track {
   height: 8px;
   border-radius: 999px;
-  background: var(--line);
+  background: linear-gradient(
+    to right,
+    var(--lamp) var(--fill, 0%),
+    var(--line) var(--fill, 0%)
+  );
 }
 .page-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -1526,6 +1524,12 @@ body { overflow-x: hidden; }
   border-radius: 999px;
   background: var(--line);
 }
+/* Firefox hat dafür ein eigenes Pseudo-Element, statt eines Verlaufs. */
+.page-slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 999px 0 0 999px;
+  background: var(--lamp);
+}
 .page-slider::-moz-range-thumb {
   width: 28px;
   height: 28px;
@@ -1534,6 +1538,8 @@ body { overflow-x: hidden; }
   border: 3px solid var(--night);
   box-shadow: 0 2px 6px rgba(var(--shadow-color), 0.5);
 }
+
+.page-input { width: 84px; text-align: center; flex: none; }
 
 .btn-rating {
   padding: 9px 0;
