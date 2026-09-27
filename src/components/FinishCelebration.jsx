@@ -49,8 +49,8 @@ export default function FinishCelebration({ book, nth, onRate, onDone, notify })
 
         <p className="celebrate-label">Wie war's?</p>
         <div className="btn-row" style={{ justifyContent: 'center', marginBottom: 18 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} className="btn"
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+            <button key={n} className="btn btn-rating"
               style={n <= (book.rating || 0)
                 ? { borderColor: 'var(--lamp)', color: 'var(--lamp)' }
                 : undefined}
