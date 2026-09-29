@@ -29,6 +29,7 @@ export default function App() {
   const [draft, setDraft] = useState(null)
   const [draftUnknown, setDraftUnknown] = useState(false)
   const [draftPending, setDraftPending] = useState(null)
+  const [scanWish, setScanWish] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
   const [quickId, setQuickId] = useState(null)
   const [toast, setToast] = useState(null)
@@ -95,6 +96,10 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbState])
 
+  useEffect(() => {
+    if (tab !== 'scan') setScanWish(false)
+  }, [tab])
+
   // Einmalig im Hintergrund: schwarze Ränder von schon gespeicherten Covern
   // abschneiden. Später ist das über „Mehr“ jederzeit von Hand möglich.
   useEffect(() => {
@@ -136,6 +141,8 @@ export default function App() {
           onOpen={openBookById}
           onLongPress={quickEditBook}
           onScan={() => setTab('scan')}
+          notify={notify}
+          onAddWish={() => { setScanWish(true); setTab('scan') }}
           onManual={() => {
             setDraftUnknown(false)
             setDraftPending(null)
@@ -149,10 +156,12 @@ export default function App() {
           sheetOpen={Boolean(openId || draft || bulkOpen)}
           onBulk={() => setBulkOpen(true)}
           notify={notify}
+          wishMode={scanWish}
+          onLeaveWishMode={() => setScanWish(false)}
           onFound={(book, unknown, pending) => {
             setDraftUnknown(unknown)
             setDraftPending(pending || null)
-            setDraft(book)
+            setDraft(scanWish ? { ...book, status: 'wishlist' } : book)
           }}
           onExisting={(book) => {
             notify(`„${book.title}“ steht schon im Regal`)
@@ -197,12 +206,12 @@ export default function App() {
           draft={draft}
           title={draftUnknown ? 'Nichts gefunden — bitte selbst ausfüllen' : 'Stimmt das so?'}
           pending={draftPending}
-          submitLabel="Ins Regal"
+          submitLabel={draft.status === 'wishlist' ? 'Auf die Wunschliste' : 'Ins Regal'}
           onCancel={() => setDraft(null)}
           onSave={(data) => {
             // Sofort schließen und bestätigen; das Schreiben läuft nebenher.
             setDraft(null)
-            notify(`„${data.title}“ steht im Regal`)
+            notify(data.status === 'wishlist' ? `„${data.title}“ steht auf der Wunschliste` : `„${data.title}“ steht im Regal`)
             addBook(data).catch(() => notify('Speichern hat nicht geklappt.'))
           }}
         />

@@ -44,10 +44,20 @@ export default defineConfig({
         // Der ZXing-Fallback wiegt gut 400 KB und wird nur auf Geräten ohne
         // native Barcode-Erkennung gebraucht — also nicht auf Android. Deshalb
         // nicht vorab mitladen, sondern erst bei Bedarf holen und dann behalten.
-        globIgnores: ['**/zxing*.js'],
+        globIgnores: ['**/zxing*.js', '**/ocr/**'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // API-Antworten und Cover offline vorhalten
         runtimeCaching: [
+          {
+            // Texterkennung für Zitate: ca. 16 MB, daher erst bei erster Nutzung laden.
+            urlPattern: /\/ocr\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ocr-cache',
+              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
           {
             urlPattern: /^https:\/\/covers\.openlibrary\.org\/.*/i,
             handler: 'CacheFirst',
@@ -77,8 +87,8 @@ export default defineConfig({
         scope: './',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#171b21',
-        theme_color: '#171b21',
+        background_color: '#faf3e7',
+        theme_color: '#faf3e7',
         icons: [
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },

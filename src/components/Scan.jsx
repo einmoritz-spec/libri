@@ -7,7 +7,7 @@ import {
 } from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
 
-export default function Scan({ onFound, onExisting, onManual, onWishlist, notify, sheetOpen, onBulk }) {
+export default function Scan({ onFound, onExisting, onManual, onWishlist, notify, sheetOpen, onBulk, wishMode, onLeaveWishMode }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const stopRef = useRef(null)
@@ -231,6 +231,15 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
         <h1 className="wordmark">Scannen</h1>
         {engine && <span className="count">{engine}</span>}
       </div>
+
+      {wishMode && (
+        <div className="notice">
+          <p><b>Wunschliste:</b> Gescannte Bücher kommen auf die Wunschliste.</p>
+          <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onLeaveWishMode}>
+            Doch ins Regal
+          </button>
+        </div>
+      )}
 
       {error && <div className="notice warn"><p>{error}</p></div>}
 

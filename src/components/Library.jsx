@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, STATUS, STATUS_ORDER } from '../lib/db'
+import { db, STATUS, STATUS_ORDER, updateBook } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import { BookCard } from './BookCard'
@@ -147,7 +147,7 @@ function ListIcon() {
 }
 
 
-export default function Library({ onOpen, onLongPress, onScan, onManual }) {
+export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWish, notify }) {
   /* Zwei Wege an dieselben Daten. Die Live-Abfrage hält die Anzeige aktuell,
      der direkte Lesevorgang liefert die Bücher garantiert einmal — auch wenn
      die Live-Abfrage aus irgendeinem Grund nie etwas meldet. */
@@ -176,6 +176,27 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
     [books]
   )
 
+  // Die Wunschliste hat einen eigenen Reiter und zählt nicht zum Regal.
+  const ownedBooks = useMemo(
+    () => (nonKidsBooks ? nonKidsBooks.filter((b) => b.status !== 'wishlist') : nonKidsBooks),
+    [nonKidsBooks]
+  )
+  const wishBooks = useMemo(
+    () => (nonKidsBooks ? nonKidsBooks.filter((b) => b.status === 'wishlist')
+      .sort((a, b) => (b.addedAt || '').localeCompare(a.addedAt || '')) : []),
+    [nonKidsBooks]
+  )
+
+  // Notizen für die Suche: pro Buch ein kleingeschriebener Gesamttext.
+  const allNotes = useLiveQuery(() => db.notes.toArray(), [], [])
+  const notesText = useMemo(() => {
+    const m = new Map()
+    for (const n of allNotes || []) {
+      m.set(n.bookId, `${m.get(n.bookId) || ''} ${(n.text || '').toLowerCase()}`)
+    }
+    return m
+  }, [allNotes])
+
   const [view, setView] = useState(() => localStorage.getItem('libri:libview') || 'home')
   const kidsTabEnabled = localStorage.getItem('libri:kidsTab') === '1'
   useEffect(() => {
@@ -203,9 +224,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
   }, [])
 
   const shown = useMemo(() => {
-    if (!nonKidsBooks) return []
+    if (!ownedBooks) return []
     const q = query.trim().toLowerCase()
-    let list = nonKidsBooks.filter((b) => {
+    let list = ownedBooks.filter((b) => {
       if (status !== 'all' && b.status !== status) return false
       if (lang !== 'all' && b.language !== lang) return false
       if (tag !== 'all' && !(b.tags || []).includes(tag)) return false
@@ -216,7 +237,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
         (b.authors || []).join(' ').toLowerCase().includes(q) ||
         (b.tags || []).join(' ').toLowerCase().includes(q) ||
         (b.series || '').toLowerCase().includes(q) ||
-        (b.isbn13 || '').includes(q)
+        (b.isbn13 || '').includes(q) ||
+        (b.description || '').toLowerCase().includes(q) ||
+        (notesText.get(b.id) || '').includes(q)
       )
     })
     const byName = (b) => (b.authors?.[0] || 'zzz').split(' ').pop().toLowerCase()
@@ -235,7 +258,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
       return (b.addedAt || '').localeCompare(a.addedAt || '')
     })
     return list
-  }, [nonKidsBooks, query, status, lang, tag, series, sort])
+  }, [ownedBooks, notesText, query, status, lang, tag, series, sort])
 
   if (loadError) {
     return (
@@ -279,15 +302,15 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
     )
   }
 
-  const counts = nonKidsBooks.reduce((acc, b) => {
+  const counts = ownedBooks.reduce((acc, b) => {
     acc[b.status] = (acc[b.status] || 0) + 1
     return acc
   }, {})
-  const seriesNames = [...new Set(nonKidsBooks.map((b) => b.series).filter(Boolean))].sort((a, b) =>
+  const seriesNames = [...new Set(ownedBooks.map((b) => b.series).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
-  const languages = [...new Set(nonKidsBooks.map((b) => b.language).filter(Boolean))].sort()
-  const tags = [...new Set(nonKidsBooks.flatMap((b) => b.tags || []))].sort((a, b) =>
+  const languages = [...new Set(ownedBooks.map((b) => b.language).filter(Boolean))].sort()
+  const tags = [...new Set(ownedBooks.flatMap((b) => b.tags || []))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
 
@@ -302,9 +325,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
       <div className="screen-head">
         <h1 className="wordmark">Libri</h1>
         <span className="count">
-          {view === 'all' && shown.length !== nonKidsBooks.length
-            ? `${shown.length} von ${nonKidsBooks.length}`
-            : `${books.length} Bücher`}
+          {view === 'all' && shown.length !== ownedBooks.length
+            ? `${shown.length} von ${ownedBooks.length}`
+            : `${ownedBooks.length} Bücher`}
         </span>
       </div>
 
@@ -312,6 +335,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
         <div className="view-toggle">
           <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
           <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
+          <button aria-pressed={view === 'wish'} onClick={() => setView('wish')}>
+            Wunschliste{wishBooks.length ? ` ${wishBooks.length}` : ''}
+          </button>
           {kidsTabEnabled && (
             <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
           )}
@@ -326,10 +352,37 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
         )}
       </div>
 
-      {view === 'kids' && kidsTabEnabled ? (
+      {view === 'wish' ? (
+        <>
+          <div className="wish-head">
+            <span className="count">
+              {wishBooks.length ? `${wishBooks.length} ${wishBooks.length === 1 ? 'Buch' : 'Bücher'}` : ''}
+            </span>
+            <button className="btn btn-primary" onClick={onAddWish}>+ Hinzufügen</button>
+          </div>
+          {wishBooks.length === 0 ? (
+            <div className="empty">
+              <EmptyBookIcon />
+              <p>Noch nichts auf der Wunschliste. Scanne den Barcode eines Buchs, das du dir noch kaufen willst.</p>
+            </div>
+          ) : (
+            <div className="wish-list">
+              {wishBooks.map((b) => (
+                <div className="wish-row" key={b.id}>
+                  <BookCard book={b} layout="row" onOpen={onOpen} onLongPress={onLongPress} />
+                  <button className="btn btn-quiet" onClick={async () => {
+                    await updateBook(b.id, { status: 'owned' })
+                    notify?.(`„${b.title}“ ist jetzt im Regal`)
+                  }}>Gekauft</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : view === 'kids' && kidsTabEnabled ? (
         <KidsShelf books={books} onOpen={onOpen} onLongPress={onLongPress} />
       ) : view === 'home' ? (
-        <Home books={nonKidsBooks} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
+        <Home books={ownedBooks} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
       ) : (
         <>
           <div className="search-wrap">

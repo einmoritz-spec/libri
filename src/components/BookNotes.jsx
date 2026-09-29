@@ -2,15 +2,47 @@ import { useEffect, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, notesFor, addNote, updateNote, deleteNote } from '../lib/db'
+import { recognizeText } from '../lib/ocr'
 
 /* Zitate werden bewusst anders gesetzt als Notizen: eingerückt, in der
    Serifenschrift des Buchtitels, mit Seitenangabe. Eine Notiz ist ein
    Gedanke von dir, ein Zitat ist der Text des Buchs — das darf man sehen. */
 
-function Editor({ initial, onSave, onCancel }) {
+function CameraIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 8h3l1.6-2.4h6.8L17 8h3v11H4z" /><circle cx="12" cy="13" r="3.4" />
+    </svg>
+  )
+}
+
+function Editor({ initial, language, onSave, onCancel }) {
   const [type, setType] = useState(initial?.type || 'quote')
   const [text, setText] = useState(initial?.text || '')
   const [page, setPage] = useState(initial?.page ?? '')
+  // Foto → Text. progress: null = aus, sonst 0…1 (bei 0 lädt noch die Erkennung)
+  const [ocr, setOcr] = useState(null)
+  const [ocrMsg, setOcrMsg] = useState('')
+
+  async function readPhoto(file) {
+    if (!file) return
+    setOcrMsg('')
+    setOcr(0)
+    try {
+      const found = await recognizeText(file, { language, onProgress: setOcr })
+      if (!found) {
+        setOcrMsg('Im Foto wurde kein Text erkannt. Näher ran, gerades Licht, und die Seite möglichst gerade halten.')
+      } else {
+        setText((t) => (t.trim() ? `${t.trim()}\n\n${found}` : found))
+        setType('quote')
+        setOcrMsg('Text erkannt — bitte kurz prüfen und Unpassendes löschen.')
+      }
+    } catch {
+      setOcrMsg('Die Texterkennung ließ sich nicht starten. Beim ersten Mal wird Internet gebraucht, um sie zu laden.')
+    } finally {
+      setOcr(null)
+    }
+  }
 
   return (
     <div className="note-editor">
@@ -26,6 +58,23 @@ function Editor({ initial, onSave, onCancel }) {
           placeholder={type === 'quote' ? 'Die Stelle aus dem Buch…' : 'Dein Gedanke dazu…'}
           autoFocus
         />
+      </div>
+
+      <div className="ocr-row">
+        <label className={`btn${ocr !== null ? ' is-disabled' : ''}`}>
+          <CameraIcon /> Foto einer Seite
+          <input
+            type="file" accept="image/*" hidden disabled={ocr !== null}
+            onChange={(e) => { readPhoto(e.target.files?.[0]); e.target.value = '' }}
+          />
+        </label>
+        {ocr !== null ? (
+          <span className="ocr-status"><span className="spinner" />{' '}
+            {ocr > 0 ? `Text wird gelesen … ${Math.round(ocr * 100)} %` : 'Texterkennung wird geladen …'}
+          </span>
+        ) : ocrMsg ? (
+          <span className="ocr-status">{ocrMsg}</span>
+        ) : null}
       </div>
 
       <div className="progress">
@@ -84,6 +133,7 @@ export default function BookNotes({ book, notify }) {
 
       {adding && (
         <Editor
+          language={book.language}
           onCancel={() => setAdding(false)}
           onSave={async (data) => {
             await addNote({ bookId: book.id, ...data })
@@ -95,6 +145,7 @@ export default function BookNotes({ book, notify }) {
 
       {editing && (
         <Editor
+          language={book.language}
           initial={editing}
           onCancel={() => setEditing(null)}
           onSave={async (data) => {
