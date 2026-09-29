@@ -337,6 +337,56 @@ export async function exportLibrary() {
   }
 }
 
+/* Welche Felder beim Einlesen für schon vorhandene Bücher gelten.
+   Angaben zum Buch selbst (Text, Seitenzahl, Verlag …) übernimmt die
+   Sicherung, sobald sie etwas Anderes und Nichtleeres enthält. Alles
+   Persönliche (Status, Fortschritt, Bewertung, Daten, eigene Schlagworte)
+   wird dagegen nur aufgefüllt, wenn es im Buch noch leer ist — sonst würde
+   eine ältere Sicherung Lesestand und Bewertung zurücksetzen. */
+const IMPORT_OVERWRITE = [
+  'title', 'subtitle', 'authors', 'publisher', 'year', 'pages', 'language',
+  'description', 'series', 'seriesIndex', 'coverUrl', 'source'
+]
+const IMPORT_FILL_ONLY = [
+  'status', 'currentPage', 'rating', 'notes', 'tags', 'startedAt', 'finishedAt',
+  'addedAt', 'datesConfirmed', 'shelfRow', 'shelfIndex', 'spineColor'
+]
+
+function hasValue(v) {
+  if (v === null || v === undefined || v === '') return false
+  if (Array.isArray(v)) return v.length > 0
+  return true
+}
+
+function sameValue(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
+
+/** Vergleicht ein vorhandenes Buch mit dem Eintrag aus der Sicherung und
+    gibt zurück, was geändert werden muss (leer, wenn nichts). */
+async function diffForImport(existing, incoming, coverData) {
+  const changes = {}
+  for (const k of IMPORT_OVERWRITE) {
+    // "wird ergänzt…" ist nur ein Platzhalter beim Scannen, kein echter Wert.
+    if (k === 'source' && incoming[k] === 'wird ergänzt…') continue
+    if (hasValue(incoming[k]) && !sameValue(existing[k], incoming[k])) changes[k] = incoming[k]
+  }
+  for (const k of IMPORT_FILL_ONLY) {
+    if (hasValue(incoming[k]) && !hasValue(existing[k])) changes[k] = incoming[k]
+  }
+  // Ein Text aus der Sicherung macht den Vermerk "wurde schon versucht" hinfällig.
+  if (changes.description) {
+    changes.descriptionTried = false
+  }
+  if (coverData) {
+    const blob = await dataUrlToBlob(coverData)
+    const stored = existing.hasCover ? await db.covers.get(existing.id) : null
+    // Bild ersetzen, wenn keins da ist oder es sich erkennbar unterscheidet.
+    if (blob && (!stored?.blob || stored.blob.size !== blob.size)) changes.coverBlob = blob
+  }
+  return changes
+}
+
 export async function importLibrary(payload, { replace = false } = {}) {
   if (!payload || payload.format !== 'libri-backup') {
     throw new Error('Das ist keine Libri-Sicherung.')
@@ -349,6 +399,7 @@ export async function importLibrary(payload, { replace = false } = {}) {
   }
   let added = 0
   let skipped = 0
+  let updated = 0
   // Beim Einfügen bekommt jedes Buch eine neue Nummer. Notizen verweisen aber
   // auf die alte — deshalb die Zuordnung mitführen und am Ende umschreiben.
   const idMap = new Map()
@@ -362,8 +413,15 @@ export async function importLibrary(payload, { replace = false } = {}) {
       ? await findByIsbn(rest.isbn13)
       : await findByTitleAuthor(rest.title, rest.authors?.[0])
     if (existing) {
-      skipped++
       if (id != null) idMap.set(id, existing.id)
+      // Schon vorhanden: nicht neu anlegen, aber Neuerungen aus der Datei übernehmen.
+      const changes = await diffForImport(existing, rest, coverData)
+      if (Object.keys(changes).length) {
+        await updateBook(existing.id, changes)
+        updated++
+      } else {
+        skipped++
+      }
       continue
     }
     const coverBlob = coverData ? await dataUrlToBlob(coverData) : null
@@ -373,11 +431,15 @@ export async function importLibrary(payload, { replace = false } = {}) {
     added++
   }
 
+  // Notizen und Sitzungen: nur hinzufügen, was es beim Buch noch nicht gibt.
+  // Sonst würde jedes erneute Einlesen dieselben Einträge verdoppeln.
   let notesAdded = 0
   for (const n of payload.notes || []) {
     const bookId = idMap.get(n.bookId)
     if (!bookId) continue // Buch nicht übernommen, Notiz wäre verwaist
     const { id, ...rest } = n
+    const have = await db.notes.where('bookId').equals(bookId).toArray()
+    if (have.some((x) => x.createdAt === rest.createdAt && x.text === rest.text)) continue
     await db.notes.add({ ...rest, bookId })
     notesAdded++
   }
@@ -391,11 +453,13 @@ export async function importLibrary(payload, { replace = false } = {}) {
     const bookId = idMap.get(s.bookId)
     if (!bookId) continue // Buch nicht übernommen, Sitzung wäre verwaist
     const { id, ...rest } = s
+    const have = await db.sessions.where('bookId').equals(bookId).toArray()
+    if (have.some((x) => x.date === rest.date && x.at === rest.at && x.pages === rest.pages)) continue
     await db.sessions.add({ ...rest, bookId })
     sessionsAdded++
   }
 
-  return { added, skipped, notesAdded, sessionsAdded }
+  return { added, updated, skipped, notesAdded, sessionsAdded }
 }
 
 /** Fehlt bei diesem Buch noch etwas, das die Ergänzung liefern könnte? */
