@@ -1430,6 +1430,7 @@ body { overflow-x: hidden; }
 }
 
 .review-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.review-row > button.review-card { width: auto; min-width: 0; }
 
 .review-card {
   flex: 1;
@@ -1577,3 +1578,276 @@ body { overflow-x: hidden; }
   border-radius: 6px;
   box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.7);
 }
+
+/* ---------- Kurzbeschreibung neben dem Cover ---------- */
+
+/* Rechte Spalte im Kopfbereich: oben die Angaben, unten bündig zur
+   Unterkante des Covers der Anreißer. So füllt er genau den freien Platz. */
+.detail-info {
+  flex: 1 1 0;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+}
+
+.blurb {
+  position: relative;
+  margin-top: auto;
+  padding-top: 10px;
+}
+.blurb-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--dim);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* "mehr" sitzt am Ende der dritten Zeile; der Verlauf blendet den
+   abgeschnittenen Text dahinter weich aus. */
+.blurb-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to right, transparent, var(--night) 42%);
+  border: 0;
+  padding: 0 0 0 30px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--paper);
+}
+
+.blurb-sheet {
+  width: 100%;
+  max-width: 520px;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: var(--night);
+  border-top: 1px solid var(--line);
+  border-radius: 18px 18px 0 0;
+  padding: 22px var(--pad) calc(env(safe-area-inset-bottom) + 20px);
+  box-shadow: 0 -12px 34px -8px rgba(var(--shadow-color), 0.6);
+  animation: quick-up 0.24s var(--ease);
+}
+.blurb-sheet-title {
+  font-family: var(--serif);
+  font-size: 19px;
+  line-height: 1.25;
+  margin: 0 0 12px;
+}
+.blurb-sheet-text {
+  margin: 0 0 20px;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--paper);
+  white-space: pre-line;
+}
+
+/* ---------- Seite merken + Fertig gelesen in einer Reihe ---------- */
+
+.progress-actions { display: flex; gap: 8px; margin-top: 14px; }
+.progress-actions .page-input {
+  width: 64px;
+  flex: none;
+  min-width: 0;
+  padding-left: 4px;
+  padding-right: 4px;
+  text-align: center;
+}
+.progress-actions .btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 11px 4px;
+  font-size: 14px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Ein Eingabefeld mit flex:1 neben einem Knopf darf schrumpfen. Ohne das
+   hält es seine Standardbreite und schiebt den Knopf aus dem Rahmen —
+   sichtbar beim Sichern-Knopf im Zitat-Editor. */
+.progress .search { min-width: 0; }
+
+/* ---------- Lesejahr: antippbare Kacheln ---------- */
+
+/* Kacheln sind jetzt Knöpfe. Ein kleiner Pfeil oben rechts zeigt, dass sich
+   dahinter mehr verbirgt, ohne die Kachel zu überladen. */
+button.review-card {
+  /* Ein Knopf nimmt anders als ein div nicht von selbst die volle Breite —
+     die große Kachel schrumpfte sonst auf die Hälfte zusammen. */
+  width: 100%;
+  position: relative;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.review-tap::after,
+.review-book::after {
+  content: '\203A';
+  color: var(--dim);
+  font-size: 22px;
+  line-height: 1;
+}
+button.review-tap::after { position: absolute; top: 12px; right: 14px; }
+.review-book::after { margin-left: auto; flex: none; }
+
+.review-eyebrow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+}
+
+/* ---------- Donut ---------- */
+
+.donut {
+  position: relative;
+  width: 232px;
+  height: 232px;
+  margin: 6px auto 22px;
+}
+.donut svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.donut circle { transition: stroke-width 0.15s var(--ease), opacity 0.15s var(--ease); cursor: pointer; }
+.donut-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 48px;
+  pointer-events: none;
+}
+.donut-center b {
+  font-family: var(--serif);
+  font-size: 28px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.donut-center span { font-size: 11.5px; color: var(--dim); line-height: 1.3; }
+.donut-center .donut-center-label {
+  color: var(--paper);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 2px 0;
+}
+
+.legend { display: flex; flex-direction: column; }
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 6px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: inherit;
+  text-align: left;
+  font-size: 14px;
+  transition: background-color 0.15s var(--ease);
+}
+.legend-row.is-selected { background: var(--slate); }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.legend-name {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.legend-val {
+  flex: none;
+  font-size: 12.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.legend-val b { color: var(--paper); font-weight: 600; }
+
+/* ---------- Ranglisten (Umfang, Autoren) ---------- */
+
+.rank-row {
+  display: block;
+  width: 100%;
+  padding: 11px 2px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  color: inherit;
+  text-align: left;
+}
+.rank-top { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.rank-top span {
+  min-width: 0;
+  font-family: var(--serif);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-top b { flex: none; font-variant-numeric: tabular-nums; }
+.rank-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  margin-top: 7px;
+  overflow: hidden;
+}
+.rank-bar i { display: block; height: 100%; background: var(--lamp); border-radius: 3px; }
+
+.author-block { padding: 14px 0 8px; border-bottom: 1px solid var(--line); }
+.author-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.author-name { font-family: var(--serif); font-size: 16px; }
+.author-count { font-size: 12.5px; color: var(--dim); white-space: nowrap; }
+.author-book {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 0;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 13px;
+  text-align: left;
+}
+.author-book span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.author-book span:last-child { flex: none; font-variant-numeric: tabular-nums; }
+.author-block .rank-bar { margin: 8px 0 6px; }
+
+/* ---------- Monatsblöcke, Sterne, Zusatzspalte in Buchzeilen ---------- */
+
+.month-block-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin: 26px 0 4px;
+}
+.month-block-head h2 { margin: 0; }
+.month-block-head span { font-size: 12.5px; color: var(--dim); }
+
+.stars { white-space: nowrap; letter-spacing: 0.5px; }
+.stars i { font-style: normal; font-size: 12px; color: var(--line); }
+.stars i.on { color: var(--lamp); }
+
+.book-row-side {
+  flex: none;
+  text-align: right;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.book-row-side b { color: var(--paper); font-weight: 600; }

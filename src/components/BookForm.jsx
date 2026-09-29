@@ -40,6 +40,7 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
         }
         fill('title', extra.title)
         fill('subtitle', extra.subtitle)
+        fill('description', extra.description)
         fill('publisher', extra.publisher)
         fill('year', extra.year)
         fill('pages', extra.pages)
@@ -179,6 +180,11 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       <div className="field">
         <label htmlFor="f-sub">Untertitel</label>
         <input id="f-sub" value={form.subtitle || ''} onChange={set('subtitle')} />
+      </div>
+
+      <div className="field">
+        <label htmlFor="f-desc">Beschreibung</label>
+        <textarea id="f-desc" value={form.description || ''} onChange={set('description')} />
       </div>
 
       <div className="field">

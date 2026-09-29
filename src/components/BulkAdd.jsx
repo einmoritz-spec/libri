@@ -75,6 +75,7 @@ export default function BulkAdd({ onClose, notify }) {
             isbn13: isbn,
             title: r.title,
             subtitle: r.subtitle,
+            description: r.description || '',
             authors: r.authors,
             publisher: r.publisher,
             year: r.year,

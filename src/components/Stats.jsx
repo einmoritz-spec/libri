@@ -320,7 +320,7 @@ export default function Stats({ onOpenBook }) {
             {d.best && (
               <div className="fact-row">
                 <span>Bestbewertet</span>
-                <b>{d.best.title} · {d.best.rating}/5</b>
+                <b>{d.best.title} · {d.best.rating}/10</b>
               </div>
             )}
           </div>

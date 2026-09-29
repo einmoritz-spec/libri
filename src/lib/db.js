@@ -70,6 +70,31 @@ db.version(3)
     }
   })
 
+/* Version 4: rückwirkende Korrektur der Statistik-Bestätigung. Bisher wurde
+   jedes automatisch auf "Gelesen" gesetzte Buch als unbestätigt markiert,
+   auch wenn echte Lesesitzungen dazu vorlagen. Jetzt gilt: Sitzungen
+   vorhanden → vertrauenswürdig, zählt automatisch. Nur ganz ohne jede
+   Sitzung direkt auf "Fertig gelesen" gedrückt bleibt unbestätigt, weil
+   genau das für ein nachträglich (und vermutlich falsch datiert) erfasstes
+   Buch spricht. */
+db.version(4)
+  .stores({
+    books: '++id, isbn13, title, status, addedAt, finishedAt, language, rating, year',
+    sessions: '++id, bookId, date',
+    covers: 'bookId',
+    notes: '++id, bookId, createdAt'
+  })
+  .upgrade(async (tx) => {
+    const sessions = await tx.table('sessions').toArray()
+    const hasSessions = new Set(sessions.map((s) => s.bookId))
+    const books = await tx.table('books').toArray()
+    for (const b of books) {
+      if (b.status === 'read' && !b.datesConfirmed && hasSessions.has(b.id)) {
+        await tx.table('books').update(b.id, { datesConfirmed: true })
+      }
+    }
+  })
+
 /* Öffnungszustand der Datenbank.
    Ohne das hier wartet eine Abfrage im Fehlerfall endlos — und der Bildschirm
    bleibt für immer im Ladezustand hängen, ohne dass irgendwo steht, warum. */
@@ -109,6 +134,7 @@ export function emptyBook(overrides = {}) {
     isbn13: null,
     title: '',
     subtitle: '',
+    description: '',
     authors: [],
     publisher: '',
     year: null,
@@ -205,6 +231,20 @@ export async function findByIsbn(isbn13) {
   return db.books.where('isbn13').equals(isbn13).first()
 }
 
+/** Für Bücher ohne ISBN gibt es sonst nichts, woran sich ein Doppeltes
+    erkennen ließe: Titel und erster Autor, ohne Groß-/Kleinschreibung und
+    Satzzeichen. Wird nur beim Einlesen einer Sicherung benutzt. */
+const normText = (s) =>
+  String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+
+export async function findByTitleAuthor(title, author) {
+  const t = normText(title)
+  if (!t) return undefined
+  const a = normText(author)
+  const all = await db.books.toArray()
+  return all.find((b) => normText(b.title) === t && normText(b.authors?.[0]) === a)
+}
+
 /** Fortschritt setzen und daraus Status + Lesesitzung ableiten.
     Beide Schreibvorgänge laufen in einer Transaktion — vorher waren es zwei
     getrennte Runden zur Datenbank für einen einzigen Tastendruck. */
@@ -220,7 +260,10 @@ export async function setProgress(book, page) {
   if (book.pages && p >= book.pages) {
     changes.status = 'read'
     changes.finishedAt = today
-    changes.datesConfirmed = false // automatisch gesetzt — zählt erst nach Bestätigung
+    // Über den Regler/das Eingabefeld erreicht — das ist aktives Tracking,
+    // im Unterschied zum direkten Antippen von "Fertig gelesen" ganz ohne
+    // je eine Seite eingetragen zu haben. Zählt deshalb sofort.
+    changes.datesConfirmed = true
   }
 
   const delta = p - (book.currentPage || 0)
@@ -234,12 +277,18 @@ export async function setProgress(book, page) {
 }
 
 export async function markFinished(book) {
+  // Wurde zwischendurch mindestens einmal Fortschritt getrackt, ist das
+  // Datum vertrauenswürdig und zählt automatisch in der Statistik. Ganz ohne
+  // jede Sitzung direkt auf "Fertig gelesen" zu drücken, ist dagegen genau
+  // das Muster für ein nachträglich und vermutlich zu einem falschen Datum
+  // eingetragenes Buch — das braucht weiterhin eine Bestätigung.
+  const hasSessions = (await db.sessions.where('bookId').equals(book.id).count()) > 0
   return db.books.update(book.id, {
     status: 'read',
     currentPage: book.pages || book.currentPage,
     finishedAt: new Date().toISOString(),
     startedAt: book.startedAt || new Date().toISOString(),
-    datesConfirmed: false // automatisch gesetzt — zählt erst nach Bestätigung
+    datesConfirmed: hasSessions
   })
 }
 
@@ -306,13 +355,16 @@ export async function importLibrary(payload, { replace = false } = {}) {
 
   for (const raw of payload.books || []) {
     const { id, coverData, hasCover, ...rest } = raw
-    if (rest.isbn13) {
-      const existing = await findByIsbn(rest.isbn13)
-      if (existing) {
-        skipped++
-        if (id != null) idMap.set(id, existing.id)
-        continue
-      }
+    // Mit ISBN darüber erkennen, ohne ISBN über Titel und Autor — sonst würde
+    // jedes ISBN-lose Buch bei jedem erneuten Einlesen ein weiteres Mal
+    // angelegt.
+    const existing = rest.isbn13
+      ? await findByIsbn(rest.isbn13)
+      : await findByTitleAuthor(rest.title, rest.authors?.[0])
+    if (existing) {
+      skipped++
+      if (id != null) idMap.set(id, existing.id)
+      continue
     }
     const coverBlob = coverData ? await dataUrlToBlob(coverData) : null
     // Über addBook, damit das Bild in der Cover-Tabelle landet.
@@ -330,7 +382,20 @@ export async function importLibrary(payload, { replace = false } = {}) {
     notesAdded++
   }
 
-  return { added, skipped, notesAdded }
+  // War bisher der eigentliche Fehler: exportLibrary schrieb die Sitzungen
+  // korrekt in die Sicherung, aber importLibrary hat sie nie zurückgeholt —
+  // eine Sicherung wiedereinzulesen hat den Leseverlauf stillschweigend
+  // verworfen.
+  let sessionsAdded = 0
+  for (const s of payload.sessions || []) {
+    const bookId = idMap.get(s.bookId)
+    if (!bookId) continue // Buch nicht übernommen, Sitzung wäre verwaist
+    const { id, ...rest } = s
+    await db.sessions.add({ ...rest, bookId })
+    sessionsAdded++
+  }
+
+  return { added, skipped, notesAdded, sessionsAdded }
 }
 
 /** Ergänzt fehlende Angaben für die ganze Bibliothek: Cover, Seitenzahl,
@@ -341,7 +406,12 @@ export async function backfillCovers({ onProgress, shouldStop } = {}) {
   const all = await db.books.toArray()
   // Alles, wo etwas Wesentliches fehlt — nicht nur Bücher ohne Cover.
   const missing = all.filter(
-    (b) => b.isbn13 && (!b.hasCover || !b.pages || !b.publisher || !b.year)
+    (b) =>
+      b.isbn13 &&
+      (!b.hasCover || !b.pages || !b.publisher || !b.year ||
+        // descriptionTried: eine Quelle wurde schon gefragt und hatte nichts —
+        // nicht bei jedem Durchlauf erneut anfragen.
+        (!b.description && !b.descriptionTried))
   )
 
   let filled = 0
@@ -370,6 +440,10 @@ export async function backfillCovers({ onProgress, shouldStop } = {}) {
           }
         }
 
+        if (!book.description) {
+          if (meta.description) changes.description = meta.description
+          else changes.descriptionTried = true
+        }
         if (!book.pages && meta.pages) changes.pages = meta.pages
         if (!book.publisher && meta.publisher) changes.publisher = meta.publisher
         if (!book.year && meta.year) changes.year = meta.year

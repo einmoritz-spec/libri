@@ -7,6 +7,7 @@ import BookNotes from './BookNotes'
 import ReadingHistory from './ReadingHistory'
 import SessionLog from './SessionLog'
 import FinishCelebration from './FinishCelebration'
+import BookBlurb from './BookBlurb'
 
 /* Zwischen ISO-Zeitstempel und dem, was ein Datumsfeld erwartet (JJJJ-MM-TT),
    umrechnen. Uhrzeit spielt für Lesedaten keine Rolle. */
@@ -195,16 +196,19 @@ export default function BookDetail({ book, onClose, notify }) {
         ) : (
           <Cover book={book} />
         )}
-        <div>
-          <h1 className="detail-title">{book.title}</h1>
-          {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
-          <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
-          {book.series && (
-            <p className="detail-author">
-              {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
-            </p>
-          )}
-          <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
+        <div className="detail-info">
+          <div>
+            <h1 className="detail-title">{book.title}</h1>
+            {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
+            <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
+            {book.series && (
+              <p className="detail-author">
+                {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
+              </p>
+            )}
+            <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
+          </div>
+          <BookBlurb title={book.title} text={book.description} />
         </div>
       </div>
 
@@ -250,7 +254,7 @@ export default function BookDetail({ book, onClose, notify }) {
             </p>
           )}
 
-          <div className="btn-row" style={{ marginTop: 14 }}>
+          <div className="progress-actions">
             <input
               className="page-input"
               type="number" inputMode="numeric" min="0" max={book.pages || undefined}
@@ -268,13 +272,14 @@ export default function BookDetail({ book, onClose, notify }) {
             <button className="btn btn-primary" onClick={finishBook} disabled={finishing}>
               {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
             </button>
-            {local.status !== 'reading' && (
-              <button className="btn" onClick={() => apply(
+          </div>
+          {local.status !== 'reading' && (
+            <button className="btn btn-quiet" style={{ marginTop: 6, padding: '6px 4px' }}
+              onClick={() => apply(
                 { status: 'reading', startedAt: book.startedAt || new Date().toISOString() },
                 'Steht jetzt auf „Lese ich“'
               )}>Jetzt lesen</button>
-            )}
-          </div>
+          )}
         </>
       )}
 

@@ -144,6 +144,7 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
               isbn13: partial.isbn13,
               title: partial.title,
               subtitle: partial.subtitle,
+              description: partial.description || '',
               authors: partial.authors,
               publisher: partial.publisher,
               year: partial.year,
@@ -170,6 +171,7 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
           return {
             title: meta.title,
             subtitle: meta.subtitle,
+            description: meta.description || '',
             authors: meta.authors,
             publisher: meta.publisher,
             year: meta.year,

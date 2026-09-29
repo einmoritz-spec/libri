@@ -3,7 +3,23 @@
    Netz gehen. Nur die Textdaten werden gespeichert, keine Bilder — die liegen
    ohnehin schon im Cover-Cache des Service Workers. */
 
-const PREFIX = 'libri:isbn:'
+/* Version 2: Treffer enthalten jetzt auch die Beschreibung. Ältere Einträge
+   (Präfix "libri:isbn:") kennen sie nicht — würden sie weiter benutzt, bliebe
+   die Beschreibung für diese Bücher für 90 Tage leer. Deshalb neues Präfix
+   und die alten Einträge einmalig wegräumen. */
+const PREFIX = 'libri:isbn2:'
+const OLD_PREFIX = 'libri:isbn:'
+
+try {
+  const stale = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i)
+    if (k?.startsWith(OLD_PREFIX)) stale.push(k)
+  }
+  stale.forEach((k) => localStorage.removeItem(k))
+} catch {
+  /* kein localStorage verfügbar — dann gibt es auch nichts wegzuräumen */
+}
 const MAX_ENTRIES = 300
 const MAX_AGE = 1000 * 60 * 60 * 24 * 90 // 90 Tage
 

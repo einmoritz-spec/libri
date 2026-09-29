@@ -178,6 +178,29 @@ async function fetchJson(url, ctx = null, { timeout = 6500, attempts = 2 } = {})
   return null
 }
 
+/** Beschreibungen kommen teils mit HTML-Resten (<p>, <br>, <b>) und
+    Entitäten. Für die Anzeige zu einfachem Text mit Absätzen machen. */
+function cleanDescription(raw) {
+  if (!raw) return ''
+  let t = String(raw)
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*\/\s*p\s*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+  // Sehr lange Klappentexte kappen — für die Anzeige reicht der Anfang.
+  if (t.length > 2500) t = t.slice(0, 2500).replace(/\s+\S*$/, '') + ' …'
+  return t
+}
+
 function yearFrom(str) {
   const m = String(str || '').match(/\d{4}/)
   return m ? Number(m[0]) : null
@@ -293,6 +316,7 @@ async function fromGoogle(isbn, isbn10, ctx) {
       language: v.language || '',
       coverUrl: cover ? cover.replace(/^http:/, 'https:').replace('&edge=curl', '') : null,
       categories: translateCategories(v.categories),
+      description: cleanDescription(v.description),
       source: 'Google Books'
     }
   }
@@ -333,6 +357,10 @@ async function fromOpenLibraryEdition(isbn, isbn10, ctx) {
     language: OL_LANG[(data.languages?.[0]?.key || '').split('/').pop()] || '',
     series: series?.series || '',
     seriesIndex: series?.seriesIndex ?? null,
+    // Kommt dort mal als Text, mal als { type, value }.
+    description: cleanDescription(
+      typeof data.description === 'string' ? data.description : data.description?.value
+    ),
     coverUrl: data.covers?.[0]
       ? `https://covers.openlibrary.org/b/id/${data.covers[0]}-L.jpg`
       : null,
@@ -435,6 +463,7 @@ async function byTitle(title, author, ctx) {
     pages: hit.pageCount || null,
     language: hit.language || '',
     publisher: hit.publisher || '',
+    description: cleanDescription(hit.description),
     coverUrl: (img.large || img.medium || img.thumbnail || '')
       .replace(/^http:/, 'https:')
       .replace('&edge=curl', '') || null
@@ -498,6 +527,7 @@ export async function searchBooksByText(query, { lang = null, max = 20 } = {}) {
         language: v.language || '',
         publisher: v.publisher || '',
         categories: translateCategories(v.categories),
+        description: cleanDescription(v.description),
         thumb: cover ? cover.replace(/^http:/, 'https:') : null,
         coverUrl: (img.large || img.medium || img.thumbnail || '')
           .replace(/^http:/, 'https:')
@@ -552,6 +582,7 @@ function mergeSources({ google, olBooks, olSearch, olEdition, apple }) {
     // damit als Datei für die Offline-Nutzung speichern lässt.
     coverUrl: pick(ob.coverUrl, oe.coverUrl, os.coverUrl, g.coverUrl, a.coverUrl),
     categories: pick(g.categories, os.categories) || [],
+    description: pick(g.description, oe.description) || '',
     series: oe.series || '',
     seriesIndex: oe.seriesIndex ?? null
   }
@@ -645,6 +676,7 @@ export async function lookupIsbn(rawIsbn, { onPartial } = {}) {
       merged.language = merged.language || extra.language
       merged.publisher = merged.publisher || extra.publisher
       merged.coverUrl = merged.coverUrl || extra.coverUrl
+      merged.description = merged.description || extra.description || ''
       if (extra.pages) sources.push('Titelsuche')
     }
   }

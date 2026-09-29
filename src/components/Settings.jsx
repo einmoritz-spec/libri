@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
+import { parseBackupText } from '../lib/backupText'
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
@@ -93,9 +94,12 @@ export default function Settings({ notify }) {
 
   async function doImport(file) {
     try {
-      const payload = JSON.parse(await file.text())
+      const { data: payload, repaired } = parseBackupText(await file.text())
       const { added, skipped } = await importLibrary(payload, { replace })
-      notify(`${added} übernommen${skipped ? `, ${skipped} schon vorhanden` : ''}`)
+      notify(
+        `${added} übernommen${skipped ? `, ${skipped} schon vorhanden` : ''}` +
+        (repaired ? ' — beschädigte Zeichen in der Datei wurden übergangen' : '')
+      )
     } catch (e) {
       notify(e.message || 'Die Datei ließ sich nicht lesen.')
     }
@@ -186,7 +190,7 @@ export default function Settings({ notify }) {
 
       <Section title="Fehlende Angaben ergänzen">
         <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Ergänzt fehlende Cover, Seitenzahlen, Verlage und Jahre — für jedes
+          Ergänzt fehlende Cover, Seitenzahlen, Verlage, Jahre und Beschreibungen — für jedes
           Buch über dessen eigene ISBN, damit die Werte zur richtigen Ausgabe
           passen. Läuft bewusst gemächlich, damit die Datenquellen nicht
           drosseln; bei vielen Büchern dauert das ein paar Minuten. Die App darf
