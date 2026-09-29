@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, removeDuplicateEntries } from '../lib/db'
+import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -97,6 +97,15 @@ export default function Settings({ notify }) {
     URL.revokeObjectURL(url)
     markBackupDone()
     notify('Sicherung gespeichert')
+  }
+
+  const [trimming, setTrimming] = useState(null)
+
+  async function trimCovers() {
+    setTrimming({ done: 0, total: 0 })
+    const { changed, total } = await trimAllCovers((done, t) => setTrimming({ done, total: t }))
+    setTrimming(null)
+    notify(changed ? `Bei ${changed} von ${total} Covern wurden schwarze Ränder entfernt` : 'Keine schwarzen Ränder gefunden')
   }
 
   async function cleanDuplicates() {
@@ -242,6 +251,9 @@ export default function Settings({ notify }) {
             )}
             <button className="btn" style={{ marginTop: 8 }} onClick={retryAll}>
               Erfolglose Bücher erneut versuchen
+            </button>
+            <button className="btn" style={{ marginTop: 8 }} onClick={trimCovers} disabled={Boolean(trimming)}>
+              {trimming ? `Cover prüfen … ${trimming.done} von ${trimming.total}` : 'Schwarze Cover-Ränder entfernen'}
             </button>
           </>
         )}

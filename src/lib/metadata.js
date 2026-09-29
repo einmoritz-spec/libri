@@ -784,9 +784,83 @@ export async function fetchCoverBlob(url) {
     if (!res.ok) return null
     const blob = await res.blob()
     if (!blob.type.startsWith('image/') || blob.size < 800) return null
-    return blob
+    return await trimBlackBars(blob)
   } catch {
     return null
+  }
+}
+
+/** Schneidet schwarze Balken am Rand eines Covers ab. Sie entstehen, wenn ein
+    Bild nicht das Buchformat hat und irgendwo mit Schwarz aufgefüllt wurde.
+    Das Bild behält dann einfach sein eigenes Format. Bewusst vorsichtig:
+    nur fast reines Schwarz über die ganze Kante, und nur ab etwa 3 % der
+    Breite bzw. Höhe — dunkle Cover mit schmalem schwarzem Saum bleiben
+    unberührt. Gibt bei nichts Abzuschneidendem dasselbe Blob zurück. */
+export async function trimBlackBars(blob) {
+  if (!blob || !blob.type?.startsWith('image/')) return blob
+  let bitmap
+  try {
+    bitmap = await createImageBitmap(blob)
+    const W = bitmap.width
+    const H = bitmap.height
+    const scale = Math.min(1, 300 / Math.max(W, H))
+    const w = Math.max(1, Math.round(W * scale))
+    const h = Math.max(1, Math.round(H * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
+    ctx.drawImage(bitmap, 0, 0, w, h)
+    const { data } = ctx.getImageData(0, 0, w, h)
+
+    const dark = (x, y) => {
+      const i = (y * w + x) * 4
+      return data[i + 3] < 20 || (data[i] < 24 && data[i + 1] < 24 && data[i + 2] < 24)
+    }
+    const colDark = (x) => {
+      let n = 0
+      for (let y = 0; y < h; y++) if (dark(x, y)) n++
+      return n / h >= 0.97
+    }
+    const rowDark = (y) => {
+      let n = 0
+      for (let x = 0; x < w; x++) if (dark(x, y)) n++
+      return n / w >= 0.97
+    }
+
+    let l = 0, r = 0, t = 0, b = 0
+    while (l < w * 0.25 && colDark(l)) l++
+    while (r < w * 0.25 && colDark(w - 1 - r)) r++
+    while (t < h * 0.25 && rowDark(t)) t++
+    while (b < h * 0.25 && rowDark(h - 1 - b)) b++
+    const minX = Math.max(3, w * 0.03)
+    const minY = Math.max(3, h * 0.03)
+    if (l < minX) l = 0
+    if (r < minX) r = 0
+    if (t < minY) t = 0
+    if (b < minY) b = 0
+    if (!l && !r && !t && !b) return blob
+
+    // Einen Streifen Sicherheitsabstand, damit kein dunkler Rand stehen bleibt.
+    const pad = (v) => (v ? v + 1 : 0)
+    const sx = Math.round(pad(l) / scale)
+    const sy = Math.round(pad(t) / scale)
+    const sw = W - sx - Math.round(pad(r) / scale)
+    const sh = H - sy - Math.round(pad(b) / scale)
+    if (sw < W * 0.5 || sh < H * 0.5) return blob
+
+    const out = document.createElement('canvas')
+    out.width = sw
+    out.height = sh
+    const octx = out.getContext('2d')
+    octx.imageSmoothingQuality = 'high'
+    octx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, sw, sh)
+    const trimmed = await new Promise((res) => out.toBlob(res, 'image/jpeg', 0.92))
+    return trimmed || blob
+  } catch {
+    return blob
+  } finally {
+    bitmap?.close?.()
   }
 }
 

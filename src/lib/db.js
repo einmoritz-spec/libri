@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { lookupIsbn, fetchCoverBlob, dominantColor } from './metadata.js'
+import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars } from './metadata.js'
 
 export const STATUS = {
   wishlist: 'Wunschliste',
@@ -379,7 +379,7 @@ async function diffForImport(existing, incoming, coverData) {
     changes.descriptionTried = false
   }
   if (coverData) {
-    const blob = await dataUrlToBlob(coverData)
+    const blob = await trimBlackBars(await dataUrlToBlob(coverData))
     const stored = existing.hasCover ? await db.covers.get(existing.id) : null
     // Bild ersetzen, wenn keins da ist oder es sich erkennbar unterscheidet.
     if (blob && (!stored?.blob || stored.blob.size !== blob.size)) changes.coverBlob = blob
@@ -424,7 +424,7 @@ export async function importLibrary(payload, { replace = false } = {}) {
       }
       continue
     }
-    const coverBlob = coverData ? await dataUrlToBlob(coverData) : null
+    const coverBlob = coverData ? await trimBlackBars(await dataUrlToBlob(coverData)) : null
     // Über addBook, damit das Bild in der Cover-Tabelle landet.
     const newId = await addBook({ ...rest, coverBlob })
     if (id != null) idMap.set(id, newId)
@@ -481,6 +481,28 @@ export async function removeDuplicateEntries() {
     if (seenN.has(key)) { await db.notes.delete(x.id); notes++ } else seenN.add(key)
   }
   return { sessions, notes }
+}
+
+/** Geht alle gespeicherten Cover durch und schneidet schwarze Ränder ab
+    (siehe trimBlackBars). Gibt zurück, wie viele Cover geändert wurden. */
+export async function trimAllCovers(onProgress) {
+  const ids = await db.covers.toCollection().primaryKeys()
+  let changed = 0
+  for (let i = 0; i < ids.length; i++) {
+    const rec = await db.covers.get(ids[i])
+    if (rec?.blob) {
+      const next = await trimBlackBars(rec.blob)
+      if (next !== rec.blob) {
+        await db.covers.put({ bookId: ids[i], blob: next })
+        invalidateCover(ids[i])
+        changed++
+      }
+    }
+    onProgress?.(i + 1, ids.length)
+    // Zwischendurch Luft lassen, damit die Oberfläche flüssig bleibt.
+    if (i % 5 === 4) await new Promise((r) => setTimeout(r, 0))
+  }
+  return { changed, total: ids.length }
 }
 
 /** Fehlt bei diesem Buch noch etwas, das die Ergänzung liefern könnte? */

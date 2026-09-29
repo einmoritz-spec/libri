@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, addBook, emptyBook, isAutoBackupDue, exportLibrary, markBackupDone } from './lib/db'
+import { db, addBook, emptyBook, isAutoBackupDue, exportLibrary, markBackupDone, trimAllCovers } from './lib/db'
 import Library from './components/Library'
 import Scan from './components/Scan'
 // Erst laden, wenn der Tab wirklich geöffnet wird — verkleinert das, was beim
@@ -94,6 +94,19 @@ export default function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbState])
+
+  // Einmalig im Hintergrund: schwarze Ränder von schon gespeicherten Covern
+  // abschneiden. Später ist das über „Mehr“ jederzeit von Hand möglich.
+  useEffect(() => {
+    if (localStorage.getItem('libri:coversTrimmed1')) return undefined
+    const timer = setTimeout(async () => {
+      try {
+        await trimAllCovers()
+        localStorage.setItem('libri:coversTrimmed1', '1')
+      } catch { /* beim nächsten Start erneut */ }
+    }, 8000)
+    return () => clearTimeout(timer)
+  }, [])
 
   // Zurück-Geste: immer nur die oberste Ebene schließen. Ein anderer Tab als
   // die Bibliothek zählt als eine Ebene und führt zurück zum Start.

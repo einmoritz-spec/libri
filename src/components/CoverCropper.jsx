@@ -144,17 +144,27 @@ export default function CoverCropper({ file, onDone, onCancel }) {
     try {
       const left = m.fw / 2 - m.dispW / 2 + pos.x
       const top = m.fh / 2 - m.dispH / 2 + pos.y
-      const sx = -left / m.scale
-      const sy = -top / m.scale
-      const sw = m.fw / m.scale
-      const sh = m.fh / m.scale
+      // Nur der Teil des Rahmens, der wirklich vom Foto bedeckt ist. Ragt der
+      // Rahmen über das Foto hinaus (Zoom 1, anderes Format), entsteht kein
+      // schwarzer Rand — das Cover behält dann einfach das Format des Fotos.
+      const vx0 = Math.max(0, left)
+      const vy0 = Math.max(0, top)
+      const vx1 = Math.min(m.fw, left + m.dispW)
+      const vy1 = Math.min(m.fh, top + m.dispH)
+      const vw = vx1 - vx0
+      const vh = vy1 - vy0
+      if (vw <= 1 || vh <= 1) return
+      const sx = (vx0 - left) / m.scale
+      const sy = (vy0 - top) / m.scale
+      const sw = vw / m.scale
+      const sh = vh / m.scale
 
       const canvas = document.createElement('canvas')
-      canvas.width = OUT_W
-      canvas.height = OUT_H
+      canvas.width = Math.max(1, Math.round((OUT_W * vw) / m.fw))
+      canvas.height = Math.max(1, Math.round((OUT_H * vh) / m.fh))
       const ctx = canvas.getContext('2d')
       ctx.imageSmoothingQuality = 'high'
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H)
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
 
       const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.85))
       if (blob) onDone(blob)
