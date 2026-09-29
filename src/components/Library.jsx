@@ -123,6 +123,30 @@ function LetterJump({ list, sort }) {
   )
 }
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" />
+    </svg>
+  )
+}
+function GridIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.2" /><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.2" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.2" /><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.2" />
+    </svg>
+  )
+}
+function ListIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <path d="M4 6.5h16M4 12h16M4 17.5h16" />
+    </svg>
+  )
+}
+
+
 export default function Library({ onOpen, onLongPress, onScan, onManual }) {
   /* Zwei Wege an dieselben Daten. Die Live-Abfrage hält die Anzeige aktuell,
      der direkte Lesevorgang liefert die Bücher garantiert einmal — auch wenn
@@ -277,14 +301,28 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
     <div className="screen">
       <div className="screen-head">
         <h1 className="wordmark">Libri</h1>
-        <span className="count">{books.length} Bücher</span>
+        <span className="count">
+          {view === 'all' && shown.length !== nonKidsBooks.length
+            ? `${shown.length} von ${nonKidsBooks.length}`
+            : `${books.length} Bücher`}
+        </span>
       </div>
 
-      <div className="view-toggle" style={{ marginBottom: 16 }}>
-        <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
-        <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
-        {kidsTabEnabled && (
-          <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
+      <div className="view-bar">
+        <div className="view-toggle">
+          <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
+          <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
+          {kidsTabEnabled && (
+            <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
+          )}
+        </div>
+        {view === 'all' && (
+          <div className="view-toggle view-toggle-icons" role="group" aria-label="Darstellung">
+            <button aria-pressed={density === 'grid'} aria-label="Raster" title="Raster"
+              onClick={() => setDensity('grid')}><GridIcon /></button>
+            <button aria-pressed={density === 'list'} aria-label="Liste" title="Liste"
+              onClick={() => setDensity('list')}><ListIcon /></button>
+          </div>
         )}
       </div>
 
@@ -294,16 +332,18 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
         <Home books={nonKidsBooks} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
       ) : (
         <>
-          <input
-            className="search"
-            type="search"
-            placeholder="Titel, Autor, Reihe, Schlagwort"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            aria-label="Bibliothek durchsuchen"
-          />
+          <div className="search-wrap">
+            <SearchIcon />
+            <input
+              className="search"
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              aria-label="Bibliothek durchsuchen"
+            />
+          </div>
 
-          <div className="filters-wrap">
+          <div className="filters-wrap chips-row">
             <button className="chip" aria-pressed={status === 'all'} onClick={() => setStatus('all')}>
               Alle
             </button>
@@ -383,18 +423,6 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
               )}
             </div>
           )}
-
-          <div className="density-row">
-            <span className="count">
-              {shown.length === nonKidsBooks.length
-                ? `${nonKidsBooks.length} Bücher`
-                : `${shown.length} von ${nonKidsBooks.length}`}
-            </span>
-            <div className="view-toggle">
-              <button aria-pressed={density === 'grid'} onClick={() => setDensity('grid')}>Raster</button>
-              <button aria-pressed={density === 'list'} onClick={() => setDensity('list')}>Liste</button>
-            </div>
-          </div>
 
           {shown.length === 0 ? (
             <div className="empty"><EmptyBookIcon /><p>Dazu passt nichts im Regal.</p></div>
