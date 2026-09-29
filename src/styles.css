@@ -45,6 +45,7 @@
   --leaf-wash: rgba(93, 136, 80, 0.14);
   --alarm: #b8492f;
   --shadow-color: 90, 68, 38;
+  --nav-bg: rgba(250, 243, 231, 0.94);
 }
 
 * { box-sizing: border-box; }
@@ -147,7 +148,7 @@ h2 {
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  background: rgba(20, 23, 27, 0.92);
+  background: var(--nav-bg, rgba(20, 23, 27, 0.92));
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);
   z-index: 40;
@@ -522,38 +523,62 @@ h2 {
 }
 .stat span { font-size: 13px; color: var(--dim); }
 
-.bars { display: flex; flex-direction: column; gap: 9px; }
+.bars { display: flex; flex-direction: column; gap: 4px; }
 .bar-row {
   display: grid;
-  grid-template-columns: 76px 1fr 34px;
+  grid-template-columns: 96px 1fr 2.6em;
   align-items: center;
-  gap: 10px;
-  font-size: 13px;
+  gap: 12px;
+  min-height: 32px;
+  font-size: 14px;
 }
-.bar-row i {
+.bar-label { white-space: nowrap; }
+.bar-row.is-zero .bar-label { color: var(--dim); }
+.bar-track {
+  height: 10px;
+  border-radius: 6px;
+  background: var(--raised);
+  overflow: hidden;
+}
+.bar-track i {
   display: block;
-  height: 9px;
+  height: 100%;
+  border-radius: 6px;
   background: var(--lamp);
-  border-radius: 2px;
-  min-width: 2px;
+  opacity: 0.55;
+  min-width: 6px;
 }
-.bar-row em { color: var(--dim); font-style: normal; text-align: right; font-variant-numeric: tabular-nums; }
+.bar-row.is-top .bar-track i { opacity: 1; }
+.bars.has-unit .bar-row { grid-template-columns: 96px 1fr 6.4em; }
+.bar-row em {
+  font-style: normal;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.bar-row em b { font-weight: 600; }
+.bar-row em small { color: var(--dim); font-size: 12px; margin-left: 3px; }
+.bar-row.is-zero em b { color: var(--dim); font-weight: 400; }
 
-/* ---------- Meldungen ---------- */
+/* Abschnittsüberschrift über einem Diagramm */
+.filter-label { margin: 22px 0 8px; }
+h2 + .filter-label, .facts-list + .filter-label { margin-top: 6px; }
 
 .notice {
   border: 1px solid var(--line);
   border-left: 3px solid var(--lamp);
   background: var(--slate);
   border-radius: var(--r);
-  padding: 13px 15px;
+  padding: 13px 16px;
   font-size: 14px;
+  line-height: 1.5;
   margin-bottom: 16px;
   box-shadow: 0 4px 14px -6px rgba(var(--shadow-color), 0.4);
 }
 .notice.warn { border-left-color: var(--alarm); }
 .notice p { margin: 0 0 8px; }
 .notice p:last-child { margin: 0; }
+.notice p b { font-weight: 600; }
 
 .empty {
   text-align: center;
@@ -1170,8 +1195,7 @@ body { overflow-x: hidden; }
 
 /* ---------- Kennzahlen-Liste ---------- */
 
-.facts-list { display: flex; flex-direction: column; }
-
+/* Einfache Zeile (z. B. Lesesitzungen im Buch) */
 .fact-row {
   display: flex;
   justify-content: space-between;
@@ -1191,6 +1215,41 @@ body { overflow-x: hidden; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Kennzahlen als Kacheln (Statistik, Lesejahr, Leseverlauf) */
+.facts-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.facts-list .fact-row {
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 12px;
+  min-width: 0;
+}
+.facts-list .fact-row:last-child { border-bottom: 1px solid var(--line); }
+.facts-list .fact-row b {
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  text-overflow: clip;
+}
+/* Ungerade Anzahl: die letzte Kachel über die volle Breite */
+.facts-list .fact-row:last-child:nth-child(odd) { grid-column: 1 / -1; }
 
 /* ---------- Notizen und Zitate ---------- */
 

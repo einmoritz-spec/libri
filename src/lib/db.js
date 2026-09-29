@@ -462,6 +462,27 @@ export async function importLibrary(payload, { replace = false } = {}) {
   return { added, updated, skipped, notesAdded, sessionsAdded }
 }
 
+/** Entfernt doppelte Lesesitzungen und Notizen, wie sie durch mehrfaches
+    Einlesen einer Sicherung in älteren Versionen entstanden sind. Als
+    doppelt gilt, was bei demselben Buch in Datum, Zeitstempel und Seiten
+    (bzw. Zeitstempel und Text) genau übereinstimmt; der älteste Eintrag
+    bleibt. */
+export async function removeDuplicateEntries() {
+  let sessions = 0
+  let notes = 0
+  const seenS = new Set()
+  for (const x of await db.sessions.orderBy('id').toArray()) {
+    const key = [x.bookId, x.date, x.at || '', x.pages ?? ''].join('|')
+    if (seenS.has(key)) { await db.sessions.delete(x.id); sessions++ } else seenS.add(key)
+  }
+  const seenN = new Set()
+  for (const x of await db.notes.orderBy('id').toArray()) {
+    const key = [x.bookId, x.createdAt || '', x.text || ''].join('|')
+    if (seenN.has(key)) { await db.notes.delete(x.id); notes++ } else seenN.add(key)
+  }
+  return { sessions, notes }
+}
+
 /** Fehlt bei diesem Buch noch etwas, das die Ergänzung liefern könnte? */
 function isIncomplete(b) {
   return (

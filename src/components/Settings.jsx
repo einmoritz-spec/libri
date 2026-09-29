@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried } from '../lib/db'
+import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, removeDuplicateEntries } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -27,13 +27,13 @@ export default function Settings({ notify }) {
   const fileRef = useRef(null)
   const [replace, setReplace] = useState(false)
   const [theme, setThemeState] = useState(
-    () => localStorage.getItem('libri:theme') || 'dark'
+    () => localStorage.getItem('libri:theme') || 'light'
   )
   const [celebrate, setCelebrateState] = useState(
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
   const [kidsTab, setKidsTabState] = useState(
-    () => localStorage.getItem('libri:kidsTab') !== '0'
+    () => localStorage.getItem('libri:kidsTab') === '1'
   )
 
   function setKidsTab(on) {
@@ -83,6 +83,7 @@ export default function Settings({ notify }) {
     setThemeState(next)
     localStorage.setItem('libri:theme', next)
     document.documentElement.setAttribute('data-theme', next)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'light' ? '#faf3e7' : '#171b21')
   }
 
   async function doExport() {
@@ -96,6 +97,15 @@ export default function Settings({ notify }) {
     URL.revokeObjectURL(url)
     markBackupDone()
     notify('Sicherung gespeichert')
+  }
+
+  async function cleanDuplicates() {
+    const { sessions, notes } = await removeDuplicateEntries()
+    notify(
+      sessions || notes
+        ? `${sessions} doppelte Lesesitzungen und ${notes} doppelte Notizen entfernt`
+        : 'Keine Doppelten gefunden'
+    )
   }
 
   async function doImport(file) {
@@ -194,6 +204,11 @@ export default function Settings({ notify }) {
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
           Vorhandene Bibliothek vorher leeren
         </label>
+        <p className="hint" style={{ textAlign: 'left', margin: '16px 0 8px' }}>
+          Wurden Lesesitzungen oder Notizen durch mehrfaches Einlesen doppelt angelegt,
+          lassen sich die Doppelten hier entfernen.
+        </p>
+        <button className="btn" onClick={cleanDuplicates}>Doppelte Einträge entfernen</button>
       </Section>
 
       <Section title="Fehlende Angaben ergänzen">

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { useBackLayer } from '../lib/backStack'
 import { STATUS, STATUS_ORDER } from '../lib/db'
 import { languageName, dominantColor } from '../lib/metadata'
 import { Cover } from './ui'
@@ -15,6 +16,7 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
   })
   const [saving, setSaving] = useState(false)
   const [cropping, setCropping] = useState(null)
+  useBackLayer(Boolean(cropping), () => setCropping(null))
   const [enriching, setEnriching] = useState(Boolean(pending))
   const touched = useRef(new Set())
   const fileRef = useRef(null)

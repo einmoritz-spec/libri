@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useBackLayer } from '../lib/backStack'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, STATUS, STATUS_ORDER } from '../lib/db'
 import { languageName } from '../lib/metadata'
@@ -152,11 +153,13 @@ export default function Library({ onOpen, onLongPress, onScan, onManual }) {
   )
 
   const [view, setView] = useState(() => localStorage.getItem('libri:libview') || 'home')
-  const kidsTabEnabled = localStorage.getItem('libri:kidsTab') !== '0'
+  const kidsTabEnabled = localStorage.getItem('libri:kidsTab') === '1'
   useEffect(() => {
     if (!kidsTabEnabled && view === 'kids') setView('home')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kidsTabEnabled])
+  // Zurück-Geste von „Alle“ oder „Bilderbücher“ führt auf „Start“.
+  useBackLayer(view !== 'home', () => setView('home'))
   const [density, setDensity] = useState(() => localStorage.getItem('libri:density') || 'grid')
   useEffect(() => localStorage.setItem('libri:libview', view), [view])
   useEffect(() => localStorage.setItem('libri:density', density), [density])

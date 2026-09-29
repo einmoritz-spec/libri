@@ -5,18 +5,24 @@ import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import NotesSearch from './NotesSearch'
 import YearReview from './YearReview'
+import { useBackLayer } from '../lib/backStack'
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 
 function Bars({ rows, unit = '' }) {
   const max = Math.max(...rows.map((r) => r[1]), 1)
   return (
-    <div className="bars">
+    <div className={`bars${unit ? ' has-unit' : ''}`}>
       {rows.map(([label, value]) => (
-        <div className="bar-row" key={label}>
-          <span>{label}</span>
-          <i style={{ width: `${(value / max) * 100}%` }} />
-          <em>{value}{unit}</em>
+        <div className={`bar-row${value === max && value > 0 ? ' is-top' : ''}${value === 0 ? ' is-zero' : ''}`} key={label}>
+          <span className="bar-label">{label}</span>
+          <div className="bar-track">
+            {value > 0 && <i style={{ width: `${(value / max) * 100}%` }} />}
+          </div>
+          <em>
+            <b>{value.toLocaleString('de-DE')}</b>
+            {unit && <small>{unit}</small>}
+          </em>
         </div>
       ))}
     </div>
@@ -53,6 +59,8 @@ function MonthChart({ values, unit }) {
 export default function Stats({ onOpenBook }) {
   const [notesOpen, setNotesOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  useBackLayer(notesOpen, () => setNotesOpen(false))
+  useBackLayer(reviewOpen, () => setReviewOpen(false))
   // Wie in der Bibliothek: zusätzlich direkt lesen, damit die Anzeige nicht
   // allein von der Live-Abfrage abhängt.
   const live = useLiveQuery(() => db.books.toArray(), [], undefined)
@@ -289,12 +297,12 @@ export default function Stats({ onOpenBook }) {
             )}
           </div>
 
-          <p className="filter-label" style={{ marginBottom: 4 }}>Bücher pro Monat</p>
+          <p className="filter-label">Bücher pro Monat</p>
           <MonthChart values={d.booksPerMonth} unit=" Bücher" />
 
           {yearPages > 0 && (
             <>
-              <p className="filter-label" style={{ margin: '18px 0 4px' }}>Seiten pro Monat</p>
+              <p className="filter-label">Seiten pro Monat</p>
               <MonthChart values={d.pagesPerMonth} unit=" Seiten" />
             </>
           )}
@@ -330,9 +338,9 @@ export default function Stats({ onOpenBook }) {
       {d.undated > 0 && (
         <div className="notice" style={{ marginTop: 18 }}>
           <p>
-            Bei {d.undated} gelesenen {d.undated === 1 ? 'Buch' : 'Büchern'} ist das Datum
-            noch nicht bestätigt — die tauchen im Jahresverlauf nicht auf. Im Buch unter
-            „Gelesen von … bis" einmal bestätigen oder ändern, dann zählt es mit.
+            <b>{d.undated} {d.undated === 1 ? 'Buch hat' : 'Bücher haben'} noch kein bestätigtes Lesedatum</b>{' '}
+            und {d.undated === 1 ? 'fehlt' : 'fehlen'} deshalb im Jahresverlauf. Öffne das Buch und bestätige
+            oder ändere „Gelesen von … bis“, dann zählt es mit.
           </p>
         </div>
       )}
@@ -374,10 +382,10 @@ export default function Stats({ onOpenBook }) {
             </div>
           )}
 
-          <p className="filter-label" style={{ marginBottom: 4 }}>Seiten nach Tageszeit</p>
+          <p className="filter-label">Seiten nach Tageszeit</p>
           <Bars rows={timeData.byDaypart} unit=" Seiten" />
 
-          <p className="filter-label" style={{ margin: '18px 0 4px' }}>Seiten nach Wochentag</p>
+          <p className="filter-label">Seiten nach Wochentag</p>
           <Bars rows={timeData.byWeekday} unit=" Seiten" />
 
           {timeData.untimed > 0 && (

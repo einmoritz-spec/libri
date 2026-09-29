@@ -25,10 +25,12 @@
       // Vor dem ersten Rendern gesetzt, damit beim Öffnen nie kurz das
       // falsche Erscheinungsbild aufblitzt.
       try {
-        document.documentElement.setAttribute(
-          'data-theme',
-          localStorage.getItem('libri:theme') || 'dark'
-        )
+        var t = localStorage.getItem('libri:theme') || 'light'
+        document.documentElement.setAttribute('data-theme', t)
+        // Statusleiste des Handys passend zum Erscheinungsbild färben.
+        document.querySelector('meta[name="theme-color"]')
+          .setAttribute('content', t === 'light' ? '#faf3e7' : '#171b21')
+        if (t === 'light') document.documentElement.style.background = '#faf3e7'
       } catch (e) {}
     </script>
     <style>

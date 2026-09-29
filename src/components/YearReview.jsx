@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { db } from '../lib/db'
 import { Cover } from './ui'
 import YearReviewDetail from './YearReviewDetail'
+import { useBackLayer } from '../lib/backStack'
 import { MONTHS } from '../lib/reviewData'
 
 export default function YearReview({ books, year, onClose, onOpenBook }) {
   const [quotes, setQuotes] = useState([])
   const [detail, setDetail] = useState(null)
+  useBackLayer(Boolean(detail), () => setDetail(null))
 
   // Alle Zitate, die in diesem Jahr angelegt wurden, samt zugehörigem Buch.
   useEffect(() => {

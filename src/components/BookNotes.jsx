@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useBackLayer } from '../lib/backStack'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, notesFor, addNote, updateNote, deleteNote } from '../lib/db'
 
@@ -59,6 +60,8 @@ export default function BookNotes({ book, notify }) {
 
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
+  useBackLayer(adding, () => setAdding(false))
+  useBackLayer(Boolean(editing), () => setEditing(null))
 
   const sorted = [...(notes || [])].sort((a, b) => {
     // Nach Seite geordnet, damit man dem Buch folgen kann; Seitenlose ans Ende.

@@ -13,6 +13,7 @@ import BookDetail from './components/BookDetail'
 import BookForm from './components/BookForm'
 import { Icon, Toast } from './components/ui'
 import DbGate, { useDbStatus } from './components/DbGate'
+import { useBackLayer } from './lib/backStack'
 
 const TABS = [
   { id: 'library', label: 'Bibliothek', icon: 'shelf' },
@@ -94,23 +95,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbState])
 
-  // Zurück-Taste schließt erst die Detailansicht, nicht die App.
-  useEffect(() => {
-    if (!openId && !draft) return
-    history.pushState({ sheet: true }, '')
-    let poppedByUser = false
-    const onPop = () => {
-      poppedByUser = true
-      setOpenId(null)
-      setDraft(null)
-    }
-    window.addEventListener('popstate', onPop)
-    return () => {
-      window.removeEventListener('popstate', onPop)
-      // Per Knopf geschlossen: den eigenen History-Eintrag wieder abräumen.
-      if (!poppedByUser && history.state?.sheet) history.back()
-    }
-  }, [openId, draft])
+  // Zurück-Geste: immer nur die oberste Ebene schließen. Ein anderer Tab als
+  // die Bibliothek zählt als eine Ebene und führt zurück zum Start.
+  useBackLayer(tab !== 'library', () => {
+    localStorage.setItem('libri:libview', 'home')
+    setTab('library')
+  })
+  useBackLayer(Boolean(bulkOpen), () => setBulkOpen(false))
+  useBackLayer(Boolean(quickId), () => setQuickId(null))
+  useBackLayer(Boolean(draft), () => setDraft(null))
+  useBackLayer(Boolean(openId), () => setOpenId(null))
 
   function closeSheets() {
     setOpenId(null)

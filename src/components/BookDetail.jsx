@@ -3,6 +3,7 @@ import { STATUS, setProgress, markFinished, updateBook, deleteBook, db } from '.
 import { languageName } from '../lib/metadata'
 import { Cover, useCoverSrc } from './ui'
 import BookForm from './BookForm'
+import { useBackLayer } from '../lib/backStack'
 import BookNotes from './BookNotes'
 import ReadingHistory from './ReadingHistory'
 import SessionLog from './SessionLog'
@@ -80,6 +81,8 @@ export default function BookDetail({ book, onClose, notify }) {
   const [pageInputActive, setPageInputActive] = useState(false)
   const [pageInput, setPageInput] = useState('')
   const [coverZoomed, setCoverZoomed] = useState(false)
+  useBackLayer(editing, () => setEditing(false))
+  useBackLayer(coverZoomed, () => setCoverZoomed(false))
   const coverSrc = useCoverSrc(book)
   /* Reglers Commit läuft über das native "change"-Ereignis, nicht über
      Reacts onChange: Bei <input type="range"> verhält sich Reacts onChange

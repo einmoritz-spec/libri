@@ -1,4 +1,5 @@
 import { lazy, Suspense, useRef, useState } from 'react'
+import { useBackLayer } from '../lib/backStack'
 import { updateBook } from '../lib/db'
 import { dominantColor } from '../lib/metadata'
 import { Cover } from './ui'
@@ -12,6 +13,7 @@ export default function QuickEdit({ book, onClose, notify }) {
   const [tagsText, setTagsText] = useState((book.tags || []).join(', '))
   const [coverBlob, setCoverBlob] = useState(undefined) // undefined = unverändert
   const [cropping, setCropping] = useState(null)
+  useBackLayer(Boolean(cropping), () => setCropping(null))
   const [saving, setSaving] = useState(false)
   const fileRef = useRef(null)
   const cameraRef = useRef(null)

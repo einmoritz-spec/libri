@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useBackLayer } from '../lib/backStack'
 import { sessionsFor, addSession, updateSession, deleteSession } from '../lib/db'
 
 function todayStr() {
@@ -42,6 +43,8 @@ export default function SessionLog({ book, notify }) {
   const [rows, setRows] = useState(undefined)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
+  useBackLayer(adding, () => setAdding(false))
+  useBackLayer(Boolean(editing), () => setEditing(null))
 
   async function reload() {
     setRows(await sessionsFor(book.id))
