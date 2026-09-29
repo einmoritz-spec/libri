@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers } from '../lib/db'
+import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -61,6 +61,12 @@ export default function Settings({ notify }) {
     })
     setCover({ running: false, ...res })
     notify(`${res.filled} Bücher ergänzt`)
+  }
+
+  async function retryAll() {
+    const n = await resetEnrichTried()
+    setCover(null)
+    notify(n ? `${n} Bücher werden beim nächsten Durchlauf wieder versucht` : 'Nichts zurückzusetzen')
   }
 
   async function runDiagnose() {
@@ -213,9 +219,13 @@ export default function Settings({ notify }) {
             {cover && !cover.running && (
               <p className="hint" style={{ textAlign: 'left' }}>
                 {cover.filled} von {cover.total} ergänzt
-                {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}.
+                {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}
+                {cover.skipped ? `. ${cover.skipped} früher schon erfolglos versucht, übersprungen` : ''}.
               </p>
             )}
+            <button className="btn" style={{ marginTop: 8 }} onClick={retryAll}>
+              Erfolglose Bücher erneut versuchen
+            </button>
           </>
         )}
       </Section>
