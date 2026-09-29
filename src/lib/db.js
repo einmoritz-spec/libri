@@ -398,6 +398,23 @@ export async function importLibrary(payload, { replace = false } = {}) {
   return { added, skipped, notesAdded, sessionsAdded }
 }
 
+/** Fehlt bei diesem Buch noch etwas, das die Ergänzung liefern könnte? */
+function isIncomplete(b) {
+  return (
+    !b.hasCover || !b.pages || !b.publisher || !b.year ||
+    // descriptionTried: eine Quelle wurde schon gefragt und hatte nichts.
+    (!b.description && !b.descriptionTried)
+  )
+}
+
+/** Hebt den Vermerk "schon versucht" für alle Bücher auf, damit die
+    Ergänzung sie beim nächsten Mal wieder anfragt. */
+export async function resetEnrichTried() {
+  const n = await db.books.filter((b) => b.enrichTried !== undefined).count()
+  await db.books.toCollection().modify((b) => { delete b.enrichTried; delete b.descriptionTried })
+  return n
+}
+
 /** Ergänzt fehlende Angaben für die ganze Bibliothek: Cover, Seitenzahl,
     Verlag, Jahr. Wird pro Buch über dessen eigene ISBN nachgeschlagen, damit
     die Werte zur tatsächlichen Ausgabe passen und nicht zu irgendeiner.
@@ -405,14 +422,13 @@ export async function importLibrary(payload, { replace = false } = {}) {
 export async function backfillCovers({ onProgress, shouldStop } = {}) {
   const all = await db.books.toArray()
   // Alles, wo etwas Wesentliches fehlt — nicht nur Bücher ohne Cover.
-  const missing = all.filter(
-    (b) =>
-      b.isbn13 &&
-      (!b.hasCover || !b.pages || !b.publisher || !b.year ||
-        // descriptionTried: eine Quelle wurde schon gefragt und hatte nichts —
-        // nicht bei jedem Durchlauf erneut anfragen.
-        (!b.description && !b.descriptionTried))
-  )
+  const incomplete = all.filter((b) => b.isbn13 && isIncomplete(b))
+  // enrichTried merkt sich die ISBN, für die die Quellen schon einmal
+  // verlässlich geantwortet haben, ohne alles liefern zu können. Solche
+  // Bücher werden nicht bei jedem Durchlauf erneut gefragt. Ändert sich die
+  // ISBN, gilt der Vermerk nicht mehr und das Buch kommt wieder dran.
+  const missing = incomplete.filter((b) => b.enrichTried !== b.isbn13)
+  const skipped = incomplete.length - missing.length
 
   let filled = 0
   let failed = 0
@@ -425,6 +441,9 @@ export async function backfillCovers({ onProgress, shouldStop } = {}) {
     try {
       const meta = await lookupIsbn(book.isbn13)
       if (meta.notFound) {
+        // Nur merken, wenn wirklich ein Katalog geantwortet hat — bei
+        // Drosselung oder ohne Netz soll es später nochmal versucht werden.
+        if (!meta.unreliable) await updateBook(book.id, { enrichTried: book.isbn13 })
         failed++
       } else {
         const changes = {}
@@ -449,9 +468,15 @@ export async function backfillCovers({ onProgress, shouldStop } = {}) {
         if (!book.year && meta.year) changes.year = meta.year
         if (!book.language && meta.language) changes.language = meta.language
 
+        // Bleibt nach diesem Durchlauf noch etwas offen, haben die Quellen
+        // (verlässlich geantwortet) es nicht — beim nächsten Mal überspringen.
+        const after = { ...book, ...changes, hasCover: book.hasCover || 'coverBlob' in changes }
+        if (isIncomplete(after) && !meta.unreliable) changes.enrichTried = book.isbn13
+
         if (Object.keys(changes).length) {
           await updateBook(book.id, changes)
-          filled++
+          if (Object.keys(changes).some((k) => k !== 'enrichTried' && k !== 'descriptionTried')) filled++
+          else failed++
         } else {
           failed++
         }
@@ -466,7 +491,7 @@ export async function backfillCovers({ onProgress, shouldStop } = {}) {
   }
 
   onProgress?.({ done: missing.length, total: missing.length, filled })
-  return { filled, failed, total: missing.length }
+  return { filled, failed, skipped, total: missing.length }
 }
 
 /* ---------- Notizen und Zitate ---------- */
