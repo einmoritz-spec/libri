@@ -101,9 +101,11 @@ export default function Settings({ notify }) {
   async function doImport(file) {
     try {
       const { data: payload, repaired } = parseBackupText(await file.text())
-      const { added, skipped } = await importLibrary(payload, { replace })
+      const { added, updated, skipped } = await importLibrary(payload, { replace })
       notify(
-        `${added} übernommen${skipped ? `, ${skipped} schon vorhanden` : ''}` +
+        `${added} neu` +
+        `${updated ? `, ${updated} aktualisiert` : ''}` +
+        `${skipped ? `, ${skipped} unverändert` : ''}` +
         (repaired ? ' — beschädigte Zeichen in der Datei wurden übergangen' : '')
       )
     } catch (e) {
