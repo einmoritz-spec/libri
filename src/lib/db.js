@@ -3,7 +3,7 @@ import { lookupIsbn, fetchCoverBlob, dominantColor } from './metadata.js'
 
 export const STATUS = {
   wishlist: 'Wunschliste',
-  owned: 'Im Regal',
+  owned: 'Ungelesen',
   reading: 'Lese ich',
   read: 'Gelesen',
   dnf: 'Abgebrochen'
