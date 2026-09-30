@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
+import { SelectionContext } from '../lib/selection'
+import { SelectionBar, ActionSheet } from './SelectionBar'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, STATUS, STATUS_ORDER, updateBook } from '../lib/db'
 import { languageName } from '../lib/metadata'
@@ -197,6 +199,31 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
     return m
   }, [allNotes])
 
+  // ---------- Mehrfachauswahl ----------
+  const [selected, setSelected] = useState(() => new Set())
+  const [actionsOpen, setActionsOpen] = useState(false)
+  const selRef = useRef(selected)
+  selRef.current = selected
+  const selecting = selected.size > 0
+  const clearSelection = useCallback(() => { setSelected(new Set()); setActionsOpen(false) }, [])
+  // Zurück-Geste beendet zuerst die Auswahl
+  useBackLayer(selecting, clearSelection)
+
+  const toggleSelect = useCallback((id) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+  // Antippen: bei laufender Auswahl markieren, sonst öffnen. Halten: markieren.
+  const open = useCallback(
+    (book) => (selRef.current.size ? toggleSelect(book.id) : onOpen(book)),
+    [onOpen, toggleSelect]
+  )
+  const hold = useCallback((book) => toggleSelect(book.id), [toggleSelect])
+
   const [view, setView] = useState(() => localStorage.getItem('libri:libview') || 'home')
   const kidsTabEnabled = localStorage.getItem('libri:kidsTab') === '1'
   useEffect(() => {
@@ -320,8 +347,39 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
 
   const letterList = withLetters(shown, sort)
 
+  // Was die Auswahl-Leiste unter „Alle“ bedeutet, hängt von der Ansicht ab.
+  const visibleBooks =
+    view === 'all' ? shown
+      : view === 'wish' ? wishBooks
+        : view === 'kids' ? books.filter(isKidsBook).sort((a, b) => a.title.localeCompare(b.title, 'de'))
+          : ownedBooks
+  const selectedBooks = [
+    ...visibleBooks.filter((b) => selected.has(b.id)),
+    ...books.filter((b) => selected.has(b.id) && !visibleBooks.includes(b))
+  ]
+
   return (
+    <SelectionContext.Provider value={selected}>
     <div className="screen">
+      {selecting && (
+        <SelectionBar
+          count={selected.size}
+          total={visibleBooks.length}
+          onClear={clearSelection}
+          onAll={() => setSelected(new Set(visibleBooks.map((b) => b.id)))}
+          onActions={() => setActionsOpen(true)}
+        />
+      )}
+      {actionsOpen && selecting && (
+        <ActionSheet
+          books={selectedBooks}
+          allTags={tags}
+          notify={notify || (() => {})}
+          onClose={() => setActionsOpen(false)}
+          onDone={clearSelection}
+          onEdit={(b) => { clearSelection(); onLongPress(b) }}
+        />
+      )}
       <div className="screen-head">
         <h1 className="wordmark">Libri</h1>
         <span className="count">
@@ -369,7 +427,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
             <div className="wish-list">
               {wishBooks.map((b) => (
                 <div className="wish-row" key={b.id}>
-                  <BookCard book={b} layout="row" onOpen={onOpen} onLongPress={onLongPress} />
+                  <BookCard book={b} layout="row" onOpen={open} onLongPress={hold} />
                   <button className="btn btn-quiet" onClick={async () => {
                     await updateBook(b.id, { status: 'owned' })
                     notify?.(`„${b.title}“ ist jetzt im Regal`)
@@ -380,9 +438,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
           )}
         </>
       ) : view === 'kids' && kidsTabEnabled ? (
-        <KidsShelf books={books} onOpen={onOpen} onLongPress={onLongPress} />
+        <KidsShelf books={books} onOpen={open} onLongPress={hold} />
       ) : view === 'home' ? (
-        <Home books={ownedBooks} onOpen={onOpen} onLongPress={onLongPress} onJumpToSeries={jumpToSeries} />
+        <Home books={ownedBooks} onOpen={open} onLongPress={hold} onJumpToSeries={jumpToSeries} />
       ) : (
         <>
           <div className="search-wrap">
@@ -488,7 +546,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
                   </div>
                 ) : (
                   <BookCard key={item.book.id} book={item.book} layout="row"
-                    onOpen={onOpen} onLongPress={onLongPress} />
+                    onOpen={open} onLongPress={hold} />
                 )
               )}
             </div>
@@ -501,7 +559,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
                     {item.letter}
                   </div>
                 ) : (
-                  <BookCard key={item.book.id} book={item.book} onOpen={onOpen} onLongPress={onLongPress} />
+                  <BookCard key={item.book.id} book={item.book} onOpen={open} onLongPress={hold} />
                 )
               )}
             </div>
@@ -511,5 +569,6 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
         </>
       )}
     </div>
+    </SelectionContext.Provider>
   )
 }

@@ -194,6 +194,74 @@ export async function updateBook(id, changes) {
   return db.books.update(id, changes)
 }
 
+/* ---------- Mehrfachauswahl: eine Änderung für viele Bücher ---------- */
+
+/** Wendet für jedes Buch `changes` an — ein Objekt oder eine Funktion (Buch → Objekt). */
+export async function updateBooks(ids, changes) {
+  await db.transaction('rw', db.books, async () => {
+    for (const id of ids) {
+      const c = typeof changes === 'function' ? changes(await db.books.get(id)) : changes
+      if (c) await db.books.update(id, c)
+    }
+  })
+}
+
+export async function deleteBooks(ids) {
+  for (const id of ids) await deleteBook(id)
+}
+
+/** Status für viele Bücher setzen — mit denselben Begleitangaben wie im Buch. */
+export async function bulkSetStatus(ids, status) {
+  const now = new Date().toISOString()
+  await updateBooks(ids, (b) => {
+    if (!b) return null
+    if (status === 'reading') return { status, startedAt: b.startedAt || now }
+    if (status === 'read') {
+      // Ohne Sitzungen ist das Lesedatum unbekannt — deshalb nicht bestätigt,
+      // das Buch zählt dann noch nicht im Jahresverlauf.
+      return {
+        status,
+        currentPage: b.pages || b.currentPage,
+        startedAt: b.startedAt || now,
+        finishedAt: b.finishedAt || now,
+        datesConfirmed: Boolean(b.datesConfirmed)
+      }
+    }
+    return { status }
+  })
+}
+
+export async function bulkSetAuthors(ids, authors) {
+  await updateBooks(ids, { authors })
+}
+
+/** Reihe für viele Bücher. Mit `startIndex` werden die Bände in der
+    übergebenen Reihenfolge fortlaufend durchnummeriert. */
+export async function bulkSetSeries(ids, series, startIndex = null) {
+  const order = new Map(ids.map((id, i) => [id, i]))
+  await updateBooks(ids, (b) => {
+    if (!b) return null
+    if (!series) return { series: '', seriesIndex: null }
+    return startIndex == null
+      ? { series }
+      : { series, seriesIndex: startIndex + order.get(b.id) }
+  })
+}
+
+export async function bulkTags(ids, tag, remove = false) {
+  await updateBooks(ids, (b) => {
+    if (!b) return null
+    const tags = new Set(b.tags || [])
+    if (remove) tags.delete(tag)
+    else tags.add(tag)
+    return { tags: [...tags] }
+  })
+}
+
+export async function bulkSetLanguage(ids, language) {
+  await updateBooks(ids, { language })
+}
+
 export async function deleteBook(id) {
   await db.sessions.where('bookId').equals(id).delete()
   await db.notes.where('bookId').equals(id).delete()
@@ -526,15 +594,17 @@ export async function resetEnrichTried() {
     Verlag, Jahr. Wird pro Buch über dessen eigene ISBN nachgeschlagen, damit
     die Werte zur tatsächlichen Ausgabe passen und nicht zu irgendeiner.
     Läuft bewusst langsam, damit die Quellen nicht drosseln. */
-export async function backfillCovers({ onProgress, shouldStop } = {}) {
-  const all = await db.books.toArray()
+export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}) {
+  // Mit `ids` (Auswahl): nur diese Bücher, und auch solche, bei denen es früher
+  // schon erfolglos war — wer gezielt auswählt, will es ausdrücklich noch einmal.
+  const all = (await db.books.toArray()).filter((b) => !ids || ids.includes(b.id))
   // Alles, wo etwas Wesentliches fehlt — nicht nur Bücher ohne Cover.
   const incomplete = all.filter((b) => b.isbn13 && isIncomplete(b))
   // enrichTried merkt sich die ISBN, für die die Quellen schon einmal
   // verlässlich geantwortet haben, ohne alles liefern zu können. Solche
   // Bücher werden nicht bei jedem Durchlauf erneut gefragt. Ändert sich die
   // ISBN, gilt der Vermerk nicht mehr und das Buch kommt wieder dran.
-  const missing = incomplete.filter((b) => b.enrichTried !== b.isbn13)
+  const missing = incomplete.filter((b) => ids || b.enrichTried !== b.isbn13)
   const skipped = incomplete.length - missing.length
 
   let filled = 0
