@@ -91,10 +91,21 @@ export function WishShelves({ books, onOpen, onLongPress }) {
           badge={(b) => (b.seriesIndex ? `Band ${b.seriesIndex}` : null)}
         />
       ))}
-      <Shelf
-        title={seriesList.length ? 'Einzelne Bücher' : null} books={standalone}
-        onOpen={onOpen} onLongPress={onLongPress}
-      />
+      {standalone.length > 0 && (
+        <section className="shelf-section">
+          {seriesList.length > 0 && (
+            <div className="shelf-section-head">
+              <h2>Einzelne Bücher</h2>
+              <span className="shelf-section-sub">{standalone.length}</span>
+            </div>
+          )}
+          <div className="cover-grid">
+            {standalone.map((b) => (
+              <BookCard key={b.id} book={b} onOpen={onOpen} onLongPress={onLongPress} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
