@@ -9,17 +9,33 @@ const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
 const isInstalled = window.matchMedia('(display-mode: standalone)').matches ||
   window.navigator.standalone === true
 
-/** Ein aufklappbarer Abschnitt — natives <details>, damit sich niemand um
-    Auf/Zu-Zustand kümmern muss und es auch ganz ohne JavaScript bedienbar
-    bliebe. Die "Gefahrenzone" bleibt bewusst standardmäßig zu, damit man
-    nicht aus Versehen darüber stolpert. */
-function Section({ title, defaultOpen, danger, children }) {
+/** Aufklappbarer Abschnitt. Beim Öffnen der Einstellungen sind alle zu:
+    die Seite wird jedes Mal neu aufgebaut und `open` wird nie gesetzt. */
+function Section({ title, danger, children }) {
   return (
-    <details className={danger ? 'settings-section settings-section-danger' : 'settings-section'}
-      open={defaultOpen}>
+    <details className={danger ? 'settings-section settings-section-danger' : 'settings-section'}>
       <summary>{title}</summary>
       <div className="settings-section-body">{children}</div>
     </details>
+  )
+}
+
+/** Eine Zeile: links die Bezeichnung, rechts die Einstellung. */
+function Row({ label, children }) {
+  return (
+    <div className="setting-row">
+      <span>{label}</span>
+      {children}
+    </div>
+  )
+}
+
+function OnOff({ on, set }) {
+  return (
+    <div className="view-toggle">
+      <button aria-pressed={on} onClick={() => set(true)}>An</button>
+      <button aria-pressed={!on} onClick={() => set(false)}>Aus</button>
+    </div>
   )
 }
 
@@ -35,6 +51,15 @@ export default function Settings({ notify }) {
   const [kidsTab, setKidsTabState] = useState(
     () => localStorage.getItem('libri:kidsTab') === '1'
   )
+
+  const [upNext, setUpNextState] = useState(
+    () => localStorage.getItem('libri:upNext') === '1'
+  )
+
+  function setUpNext(on) {
+    setUpNextState(on)
+    localStorage.setItem('libri:upNext', on ? '1' : '0')
+  }
 
   function setKidsTab(on) {
     setKidsTabState(on)
@@ -145,58 +170,37 @@ export default function Settings({ notify }) {
 
       {isIOS && !isInstalled && (
         <div className="notice warn">
-          <p><b>Wichtig auf dem iPhone.</b> Safari räumt die Daten einer Website nach
-            sieben Tagen ohne Besuch weg. Bücher wären dann weg.</p>
-          <p>Lege Libri über Teilen → „Zum Home-Bildschirm“ ab. Installiert bleiben die
-            Daten erhalten.</p>
+          <p>Auf dem iPhone: Über Teilen → „Zum Home-Bildschirm“ ablegen, sonst löscht Safari die
+            Daten nach sieben Tagen.</p>
         </div>
       )}
 
       {days !== null && days >= 14 && (
-        <div className="notice">
-          <p>Die letzte Sicherung ist {days} Tage her.</p>
-        </div>
+        <p className="settings-flag">Letzte Sicherung vor {days} Tagen</p>
       )}
 
-      <Section title="Darstellung & Verhalten" defaultOpen>
-        <h2 style={{ marginTop: 0 }}>Erscheinungsbild</h2>
-        <div className="view-toggle">
-          <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>
-            Dunkel, Lampenlicht
-          </button>
-          <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>
-            Hell, Tageslicht
-          </button>
-        </div>
-
-        <h2>Fertiggelesen-Moment</h2>
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Beim Abschließen eines Buchs kurz innehalten: Lesedauer, Buch des
-          Jahres, Bewertung und Platz für ein letztes Zitat.
-        </p>
-        <div className="view-toggle">
-          <button aria-pressed={celebrate} onClick={() => setCelebrate(true)}>An</button>
-          <button aria-pressed={!celebrate} onClick={() => setCelebrate(false)}>Aus</button>
-        </div>
-
-        <h2>Bilderbücher-Reiter</h2>
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Der dritte Schalter oben in der Bibliothek, neben Start und Alle.
-        </p>
-        <div className="view-toggle">
-          <button aria-pressed={kidsTab} onClick={() => setKidsTab(true)}>An</button>
-          <button aria-pressed={!kidsTab} onClick={() => setKidsTab(false)}>Aus</button>
-        </div>
+      <Section title="Darstellung">
+        <Row label="Design">
+          <div className="view-toggle">
+            <button aria-pressed={theme === 'light'} onClick={() => setTheme('light')}>Hell</button>
+            <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>Dunkel</button>
+          </div>
+        </Row>
+        <Row label="Abschluss-Moment">
+          <OnOff on={celebrate} set={setCelebrate} />
+        </Row>
+        <Row label="„Als Nächstes dran“ auf Start">
+          <OnOff on={upNext} set={setUpNext} />
+        </Row>
+        <Row label="Bilderbücher-Reiter">
+          <OnOff on={kidsTab} set={setKidsTab} />
+        </Row>
       </Section>
 
       <Section title="Sicherung">
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Alle Bücher liegen nur auf diesem Gerät. Die Sicherungsdatei enthält auch die Cover
-          und lässt sich auf einem anderen Gerät wieder einlesen.
-        </p>
         <div className="btn-row">
-          <button className="btn btn-primary" onClick={doExport}>Sicherung herunterladen</button>
-          <button className="btn" onClick={() => fileRef.current?.click()}>Sicherung einlesen</button>
+          <button className="btn btn-primary" onClick={doExport}>Herunterladen</button>
+          <button className="btn" onClick={() => fileRef.current?.click()}>Einlesen</button>
         </div>
         <input
           ref={fileRef}
@@ -209,88 +213,54 @@ export default function Settings({ notify }) {
             e.target.value = ''
           }}
         />
-        <label style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12, fontSize: 14 }}>
+        <label className="setting-check">
           <input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} />
-          Vorhandene Bibliothek vorher leeren
+          Bibliothek vorher leeren
         </label>
-        <p className="hint" style={{ textAlign: 'left', margin: '16px 0 8px' }}>
-          Wurden Lesesitzungen oder Notizen durch mehrfaches Einlesen doppelt angelegt,
-          lassen sich die Doppelten hier entfernen.
-        </p>
-        <button className="btn" onClick={cleanDuplicates}>Doppelte Einträge entfernen</button>
+        <button className="btn btn-quiet" onClick={cleanDuplicates}>Doppelte Einträge entfernen</button>
       </Section>
 
-      <Section title="Fehlende Angaben ergänzen">
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Ergänzt fehlende Cover, Seitenzahlen, Verlage, Jahre und Beschreibungen — für jedes
-          Buch über dessen eigene ISBN, damit die Werte zur richtigen Ausgabe
-          passen. Läuft bewusst gemächlich, damit die Datenquellen nicht
-          drosseln; bei vielen Büchern dauert das ein paar Minuten. Die App darf
-          dabei offen bleiben.
-        </p>
+      <Section title="Daten pflegen">
         {cover?.running ? (
-          <>
-            <div className="notice">
-              <p>
-                <span className="spinner" /> {cover.done} von {cover.total}
-                {cover.title ? ` — ${cover.title}` : ''}
-              </p>
-              <p>{cover.filled} Bücher bisher ergänzt.</p>
-            </div>
-            <button className="btn" onClick={() => { stopRef.current = true }}>Abbrechen</button>
-          </>
+          <div className="setting-progress">
+            <span><span className="spinner" /> {cover.done} von {cover.total} · {cover.filled} ergänzt</span>
+            <button className="btn btn-quiet" onClick={() => { stopRef.current = true }}>Abbrechen</button>
+          </div>
         ) : (
-          <>
+          <div className="setting-stack">
             <button className="btn btn-primary" onClick={runBackfill}>Angaben ergänzen</button>
             {cover && !cover.running && (
-              <p className="hint" style={{ textAlign: 'left' }}>
+              <p className="setting-result">
                 {cover.filled} von {cover.total} ergänzt
-                {cover.failed ? `, ${cover.failed} ohne neue Angaben` : ''}
-                {cover.skipped ? `. ${cover.skipped} früher schon erfolglos versucht, übersprungen` : ''}.
+                {cover.skipped ? ` · ${cover.skipped} übersprungen` : ''}
               </p>
             )}
-            <button className="btn" style={{ marginTop: 8 }} onClick={retryAll}>
-              Erfolglose Bücher erneut versuchen
-            </button>
-            <button className="btn" style={{ marginTop: 8 }} onClick={trimCovers} disabled={Boolean(trimming)}>
+            <button className="btn" onClick={retryAll}>Erfolglose erneut versuchen</button>
+            <button className="btn" onClick={trimCovers} disabled={Boolean(trimming)}>
               {trimming ? `Cover prüfen … ${trimming.done} von ${trimming.total}` : 'Schwarze Cover-Ränder entfernen'}
             </button>
-          </>
+          </div>
         )}
       </Section>
 
-      <Section title="Datenquellen">
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Nach dem Scan werden Google Books und Open Library gefragt und die
-          Angaben zusammengeführt. Fehlt etwas, kannst du jedes Feld selbst
-          nachtragen.
-        </p>
-
-        <h2>Quellen einzeln prüfen</h2>
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Zeigt, ob eine Quelle blockiert, gedrosselt oder erreichbar ist — und
-          ob sie das Buch überhaupt kennt.
-        </p>
-        <div className="progress">
+      <Section title="Quellen prüfen">
+        <form className="scan-isbn" style={{ marginTop: 4 }}
+          onSubmit={(e) => { e.preventDefault(); if (!diagBusy) runDiagnose() }}>
           <input
-            className="search"
-            style={{ flex: 1, width: 'auto', marginBottom: 0 }}
+            className="scan-isbn-input"
             inputMode="numeric"
-            placeholder="ISBN (oder leer für Testbuch)"
+            placeholder="ISBN (leer = Testbuch)"
             value={diagIsbn}
             onChange={(e) => setDiagIsbn(e.target.value)}
             aria-label="ISBN zum Prüfen"
           />
-          <button className="btn btn-primary" onClick={runDiagnose} disabled={diagBusy}>
-            {diagBusy ? <span className="spinner" /> : 'Prüfen'}
+          <button className="scan-isbn-go" type="submit" disabled={diagBusy} aria-label="Prüfen">
+            {diagBusy ? <span className="spinner" /> : '→'}
           </button>
-        </div>
+        </form>
 
         {diag && (
           <div className="diag">
-            <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
-              Geprüft: {diag.isbn}{diag.isbn10 ? ` / ${diag.isbn10}` : ''}
-            </p>
             {diag.results.map((r) => (
               <div className="diag-row" key={r.name}>
                 <span className={r.ok ? 'diag-ok' : 'diag-bad'}>{r.ok ? '\u2713' : '\u2717'}</span>
@@ -303,17 +273,12 @@ export default function Settings({ notify }) {
         )}
       </Section>
 
-      <Section title="Gefahrenzone" danger>
-        <h2 style={{ marginTop: 0 }}>Alles löschen</h2>
-        <p className="hint" style={{ textAlign: 'left', margin: '0 0 12px' }}>
-          Entfernt alle Bücher unwiderruflich von diesem Gerät. Eine Sicherung
-          davor lässt sich später wieder einlesen.
-        </p>
+      <Section title="Löschen" danger>
         <button className="btn btn-danger" onClick={wipe}>Bibliothek leeren</button>
       </Section>
 
-      <p className="hint" style={{ textAlign: 'left', marginTop: 28 }}>
-        Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE')}
+      <p className="settings-version">
+        Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
       </p>
     </div>
   )

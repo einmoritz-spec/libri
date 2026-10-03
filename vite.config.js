@@ -44,17 +44,27 @@ export default defineConfig({
         // Der ZXing-Fallback wiegt gut 400 KB und wird nur auf Geräten ohne
         // native Barcode-Erkennung gebraucht — also nicht auf Android. Deshalb
         // nicht vorab mitladen, sondern erst bei Bedarf holen und dann behalten.
-        globIgnores: ['**/zxing*.js', '**/ocr/**'],
+        globIgnores: ['**/zxing*.js'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // API-Antworten und Cover offline vorhalten
         runtimeCaching: [
           {
-            // Texterkennung für Zitate: ca. 16 MB, daher erst bei erster Nutzung laden.
-            urlPattern: /\/ocr\/.*/i,
+            // Lesereihenfolge-Übersichten: groß, daher erst beim ersten Ansehen laden
+            urlPattern: /\/guides\/.*\.jpg$/i,
             handler: 'CacheFirst',
             options: {
-              cacheName: 'ocr-cache',
-              expiration: { maxEntries: 12, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheName: 'guides-cache',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            // Lesereihenfolge-Übersichten: groß, daher erst beim ersten Ansehen laden
+            urlPattern: /\/guides\/.*\.jpg$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'guides-cache',
+              expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
               cacheableResponse: { statuses: [0, 200] }
             }
           },

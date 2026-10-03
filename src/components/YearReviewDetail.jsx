@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Cover } from './ui'
 import {
-  MONTHS, formatPct, pageSegments, donutArcs, ratingDistribution, booksByMonth, authorsRanking
+  MONTHS, formatPct, pageSegments, authorSegments, donutArcs, ratingDistribution, booksByMonth, authorsRanking
 } from '../lib/reviewData'
 
 const TITLES = {
@@ -59,14 +59,14 @@ function BooksView({ books, onOpen }) {
 
 /* ---------- Seiten: Donut ---------- */
 
-function Donut({ segments, total, selectedKey, onSelect }) {
+function Donut({ segments, total, selectedKey, onSelect, label = 'Seiten je Buch' }) {
   const R = 76
   const W = 30
   const arcs = donutArcs(segments, R)
   const sel = segments.find((s) => s.key === selectedKey)
   return (
     <div className="donut">
-      <svg viewBox="0 0 200 200" role="img" aria-label="Seiten je Buch">
+      <svg viewBox="0 0 200 200" role="img" aria-label={label}>
         <g transform="rotate(-90 100 100)">
           <circle cx="100" cy="100" r={R} fill="none" stroke="var(--line)" strokeWidth={W} opacity="0.35" />
           {segments.map((s, i) => (
@@ -99,17 +99,43 @@ function Donut({ segments, total, selectedKey, onSelect }) {
 }
 
 function PagesView({ books, onOpen }) {
-  const { segments, rows, total, missing } = useMemo(() => pageSegments(books), [books])
+  const [mode, setMode] = useState('authors') // authors | books
+  const byBook = useMemo(() => pageSegments(books), [books])
+  const byAuthor = useMemo(() => authorSegments(books), [books])
   const [selected, setSelected] = useState(null)
+  const data = mode === 'authors' ? byAuthor : byBook
+  const { segments, rows, total, missing } = data
 
   if (!segments.length) {
     return <p className="hint" style={{ textAlign: 'left' }}>Für diese Bücher ist keine Seitenzahl hinterlegt.</p>
   }
   return (
     <>
-      <Donut segments={segments} total={total} selectedKey={selected} onSelect={setSelected} />
+      <div className="view-toggle" style={{ marginBottom: 14 }}>
+        <button aria-pressed={mode === 'authors'} onClick={() => { setMode('authors'); setSelected(null) }}>Autoren</button>
+        <button aria-pressed={mode === 'books'} onClick={() => { setMode('books'); setSelected(null) }}>Bücher</button>
+      </div>
+
+      <Donut
+        segments={segments} total={total} selectedKey={selected} onSelect={setSelected}
+        label={mode === 'authors' ? 'Seiten je Autor' : 'Seiten je Buch'}
+      />
+
       <div className="legend">
-        {rows.map((r) => (
+        {mode === 'authors' ? rows.map((r) => (
+          <button
+            key={r.name}
+            className={`legend-row${selected === r.segKey ? ' is-selected' : ''}`}
+            onClick={() => setSelected(selected === r.segKey ? null : r.segKey)}
+          >
+            <span className="legend-dot" style={{ background: r.color }} />
+            <span className="legend-name">
+              {r.name}
+              <small className="legend-sub">{r.count} {r.count === 1 ? 'Buch' : 'Bücher'}</small>
+            </span>
+            <span className="legend-val"><b>{fmt(r.pages)}</b> · {formatPct(r.share)} %</span>
+          </button>
+        )) : rows.map((r) => (
           <button
             key={r.book.id}
             className={`legend-row${selected === r.segKey ? ' is-selected' : ''}`}

@@ -149,6 +149,8 @@ export function emptyBook(overrides = {}) {
     notes: '',
     tags: [],
     series: '',
+    subseries: '',
+    subseriesIndex: null,
     seriesIndex: null,
     // Nur bestätigte Daten zählen für die Statistik. "Fertig gelesen" und das
     // Erreichen der letzten Seite setzen automatisch das heutige Datum — beim
@@ -241,11 +243,34 @@ export async function bulkSetSeries(ids, series, startIndex = null) {
   const order = new Map(ids.map((id, i) => [id, i]))
   await updateBooks(ids, (b) => {
     if (!b) return null
-    if (!series) return { series: '', seriesIndex: null }
+    if (!series) return { series: '', subseries: '', subseriesIndex: null, seriesIndex: null }
     return startIndex == null
       ? { series }
       : { series, seriesIndex: startIndex + order.get(b.id) }
   })
+}
+
+/** Unterreihe (z. B. „Witches“ innerhalb von „Discworld“). Leer entfernt sie.
+    Mit `renumber` bekommen danach alle Bücher dieser Unterreihe ihren Band
+    in der Unterreihe: in der Reihenfolge der Hauptreihe, das Buch mit der
+    niedrigsten Zahl dort ist Band 1. Gezählt werden auch Bücher, die schon
+    vorher in der Unterreihe waren. */
+export async function bulkSetSubseries(ids, subseries, renumber = true) {
+  await updateBooks(ids, subseries ? { subseries } : { subseries: '', subseriesIndex: null })
+  if (!subseries || !renumber) return
+  const chosen = (await db.books.bulkGet(ids)).filter(Boolean)
+  const seriesNames = new Set(chosen.map((b) => b.series || ''))
+  const all = await db.books.toArray()
+  for (const name of seriesNames) {
+    const members = all
+      .filter((b) => (b.series || '') === name && b.subseries === subseries)
+      .sort((a, b) =>
+        (a.seriesIndex ?? 9999) - (b.seriesIndex ?? 9999) || a.title.localeCompare(b.title, 'de')
+      )
+    for (let i = 0; i < members.length; i++) {
+      await db.books.update(members[i].id, { subseriesIndex: i + 1 })
+    }
+  }
 }
 
 export async function bulkTags(ids, tag, remove = false) {
@@ -413,11 +438,11 @@ export async function exportLibrary() {
    eine ältere Sicherung Lesestand und Bewertung zurücksetzen. */
 const IMPORT_OVERWRITE = [
   'title', 'subtitle', 'authors', 'publisher', 'year', 'pages', 'language',
-  'description', 'series', 'seriesIndex', 'coverUrl', 'source'
+  'description', 'series', 'subseries', 'subseriesIndex', 'seriesIndex', 'coverUrl', 'source'
 ]
 const IMPORT_FILL_ONLY = [
   'status', 'currentPage', 'rating', 'notes', 'tags', 'startedAt', 'finishedAt',
-  'addedAt', 'datesConfirmed', 'shelfRow', 'shelfIndex', 'spineColor'
+  'addedAt', 'datesConfirmed', 'readBefore', 'shelfRow', 'shelfIndex', 'spineColor'
 ]
 
 function hasValue(v) {
@@ -711,24 +736,207 @@ export async function sessionsFor(bookId) {
   return rows.sort((a, b) => b.date.localeCompare(a.date) || (b.at || '').localeCompare(a.at || ''))
 }
 
-export async function addSession({ bookId, date, pages }) {
+/* Tageszeiten wie in der Statistik. Beim Nachtragen wird keine genaue
+   Uhrzeit abgefragt, sondern nur die Tageszeit; gespeichert wird eine
+   Uhrzeit mitten in diesem Abschnitt, damit die Auswertung sie richtig
+   zuordnet. */
+export const PERIODS = [
+  { key: 'morning', label: 'Morgens', hours: '5–11 Uhr', hour: 8 },
+  { key: 'noon', label: 'Mittags', hours: '11–14 Uhr', hour: 12 },
+  { key: 'afternoon', label: 'Nachmittags', hours: '14–18 Uhr', hour: 16 },
+  { key: 'evening', label: 'Abends', hours: '18–22 Uhr', hour: 20 },
+  { key: 'night', label: 'Nachts', hours: '22–5 Uhr', hour: 23 }
+]
+
+/** Platzhalter für „Tageszeit unbekannt“ (Mittag UTC am Tag selbst). */
+function placeholderAt(date) {
+  return `${date}T12:00:00.000Z`
+}
+
+/** Hat die Sitzung eine echte Uhrzeit? Der Platzhalter zählt nicht. */
+export function hasRealTime(s) {
+  return Boolean(s?.at) && s.at !== placeholderAt(s.date)
+}
+
+/** Uhrzeit (ISO) für ein Datum und eine Tageszeit; ohne Tageszeit der Platzhalter. */
+export function atFor(date, period) {
+  const p = PERIODS.find((x) => x.key === period)
+  if (!p) return placeholderAt(date)
+  return new Date(`${date}T${String(p.hour).padStart(2, '0')}:30:00`).toISOString()
+}
+
+/** Tageszeit einer Sitzung, oder null, wenn sie nicht bekannt ist. */
+export function periodOf(s) {
+  if (!hasRealTime(s)) return null
+  const h = new Date(s.at).getHours()
+  if (h >= 5 && h < 11) return 'morning'
+  if (h >= 11 && h < 14) return 'noon'
+  if (h >= 14 && h < 18) return 'afternoon'
+  if (h >= 18 && h < 22) return 'evening'
+  return 'night'
+}
+
+export async function addSession({ bookId, date, pages, period = null }) {
   return db.sessions.add({
     bookId,
     date,
-    at: `${date}T12:00:00.000Z`, // keine Uhrzeit abgefragt, Mittag als neutraler Platzhalter
+    at: atFor(date, period),
     pages: Math.max(0, Math.round(Number(pages) || 0))
   })
 }
 
 export async function updateSession(id, changes) {
   const clean = { ...changes }
-  if ('date' in clean) clean.at = `${clean.date}T12:00:00.000Z`
+  if ('date' in clean || 'period' in clean) {
+    const cur = await db.sessions.get(id)
+    const date = clean.date ?? cur.date
+    // Ohne neue Angabe bleibt die bisherige Tageszeit erhalten.
+    const period = 'period' in clean ? clean.period : periodOf(cur)
+    clean.at = atFor(date, period)
+  }
+  delete clean.period
   if ('pages' in clean) clean.pages = Math.max(0, Math.round(Number(clean.pages) || 0))
   return db.sessions.update(id, clean)
 }
 
 export async function deleteSession(id) {
   return db.sessions.delete(id)
+}
+
+/* ---------- Bücher ohne Lesedatum ---------- */
+
+/** Gelesen, aber ohne bestätigtes Datum und nicht als „vor dem Tracking
+    gelesen“ vermerkt — um diese geht es in der Statistik-Meldung. */
+export function isUndated(b) {
+  return b.status === 'read' && !(b.finishedAt && b.datesConfirmed) && !b.readBefore
+}
+
+/** Vermerkt, dass die Bücher schon vor der Nutzung der App gelesen wurden.
+    Sie zählen als gelesen, tauchen aber in keinem Jahresverlauf auf. */
+export async function markReadBefore(ids) {
+  await updateBooks(ids, { readBefore: true })
+}
+
+/** Trägt für ein Buch das Datum ein, an dem es beendet wurde. */
+export async function setFinishedOn(id, dateStr) {
+  // Mittags ansetzen, damit Zeitzonen das Datum nicht verschieben.
+  const finishedAt = new Date(`${dateStr}T12:00:00`).toISOString()
+  await db.books.update(id, { finishedAt, datesConfirmed: true, readBefore: false })
+}
+
+/* ---------- Gelesene Seiten (Statistik) ---------- */
+
+/** Gelesene Seiten insgesamt. Zählt auch angefangene und abgebrochene Bücher
+    mit ihrem Stand — nicht erst, wenn ein Buch fertig ist. */
+export function pagesReadTotal(books) {
+  let total = 0
+  for (const b of books) {
+    if (b.status === 'read') total += b.pages || 0
+    else if (b.status === 'reading' || b.status === 'dnf') total += b.currentPage || 0
+  }
+  return total
+}
+
+/** Gelesene Seiten je Monat eines Jahres. Grundlage sind die eingetragenen
+    Lesesitzungen (mit ihrem Datum), sodass auch ein noch nicht beendetes Buch
+    sofort mitzählt. Bei fertigen Büchern wird, was nicht als Sitzung
+    eingetragen wurde, in den Monat des bestätigten Lesedatums gelegt. */
+export function pagesByMonth(books, sessions, year) {
+  const months = Array(12).fill(0)
+  const byId = new Map(books.map((b) => [b.id, b]))
+  const logged = new Map()
+  for (const s of sessions) {
+    const book = byId.get(s.bookId)
+    if (!book || !s.date) continue
+    logged.set(s.bookId, (logged.get(s.bookId) || 0) + (s.pages || 0))
+    if (Number(s.date.slice(0, 4)) === year) months[Number(s.date.slice(5, 7)) - 1] += s.pages || 0
+  }
+  for (const b of books) {
+    if (b.status !== 'read' || !b.pages || !b.finishedAt || !b.datesConfirmed) continue
+    if (Number(b.finishedAt.slice(0, 4)) !== year) continue
+    const rest = Math.max(0, b.pages - (logged.get(b.id) || 0))
+    months[Number(b.finishedAt.slice(5, 7)) - 1] += rest
+  }
+  return months
+}
+
+/* ---------- Lesetempo ---------- */
+
+const dayKey = (d) => d.toISOString().slice(0, 10)
+
+/** Wie schnell du gerade liest, aus allen Sitzungen des letzten Monats bis
+    heute (über alle Bücher, nicht je Buch). Gerechnet wird in Seiten pro
+    Kalendertag, also mit den Tagen ohne Lesen — nur so ergibt sich eine
+    brauchbare Schätzung, wann ein Buch fertig wird.
+
+    Weicht das Tempo der letzten sieben Tage stark vom Monatsschnitt ab
+    (um mehr als ein Drittel), zählt das jüngste Tempo stärker. */
+export async function readingPace(now = new Date()) {
+  const rows = await db.sessions.toArray()
+  const dated = rows.filter((r) => r.date)
+  if (!dated.length) return null
+
+  const today = dayKey(now)
+  const daysAgo = (n) => {
+    const d = new Date(now)
+    d.setDate(d.getDate() - n)
+    return dayKey(d)
+  }
+  const first = dated.reduce((m, r) => (r.date < m ? r.date : m), today)
+  const spanDays = Math.min(30, Math.round((new Date(today) - new Date(first)) / 86400000) + 1)
+  // Weniger als drei Tage Daten sind zu wenig für eine Aussage.
+  if (spanDays < 3) return null
+
+  const from30 = daysAgo(29)
+  const from7 = daysAgo(6)
+  const inMonth = dated.filter((r) => r.date >= from30 && r.date <= today)
+  const monthPages = inMonth.reduce((a, r) => a + (r.pages || 0), 0)
+  if (monthPages <= 0) return null
+  const monthPace = monthPages / spanDays
+
+  const recentDays = Math.min(7, spanDays)
+  const recentPages = inMonth.filter((r) => r.date >= from7).reduce((a, r) => a + (r.pages || 0), 0)
+  const recentPace = recentPages / recentDays
+
+  // Der Vergleich lohnt erst, wenn es mehr als eine Woche Vorlauf gibt.
+  let pace = monthPace
+  let trend = null
+  if (spanDays >= 14) {
+    const deviation = (recentPace - monthPace) / monthPace
+    if (Math.abs(deviation) > 0.34) {
+      trend = deviation > 0 ? 'faster' : 'slower'
+      pace = recentPace > 0 ? 0.4 * monthPace + 0.6 * recentPace : monthPace * 0.4
+    }
+  }
+
+  // Seiten je Tag für die kleine Grafik
+  const perDay = new Map()
+  for (const r of inMonth) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.pages || 0))
+  const series = []
+  for (let i = 29; i >= 0; i--) {
+    const k = daysAgo(i)
+    series.push({ date: k, pages: perDay.get(k) || 0 })
+  }
+
+  return {
+    pace,                       // Seiten pro Tag, ggf. angepasst
+    monthPace, recentPace,
+    trend,                      // 'faster' | 'slower' | null
+    spanDays,
+    activeDays: perDay.size,
+    series
+  }
+}
+
+/** Schätzung für ein Buch: Rest der Seiten geteilt durch das aktuelle Tempo. */
+export function estimateFinish(book, pace, now = new Date()) {
+  if (!pace || !book.pages) return null
+  const left = Math.max(0, book.pages - (book.currentPage || 0))
+  if (!left) return null
+  const days = Math.max(1, Math.ceil(left / pace.pace))
+  const date = new Date(now)
+  date.setDate(date.getDate() + days)
+  return { left, days, date }
 }
 
 /* ---------- Leseverlauf ---------- */

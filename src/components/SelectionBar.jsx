@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
 import {
-  STATUS, bulkSetStatus, bulkSetAuthors, bulkSetSeries, bulkTags,
+  STATUS, bulkSetStatus, bulkSetAuthors, bulkSetSeries, bulkSetSubseries, bulkTags,
   bulkSetLanguage, deleteBooks, backfillCovers
 } from '../lib/db'
 
@@ -22,13 +22,14 @@ export function SelectionBar({ count, total, onClear, onAll, onActions }) {
   )
 }
 
-export function ActionSheet({ books, allTags, onClose, onDone, onEdit, notify }) {
+export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone, onEdit, notify }) {
   const [step, setStep] = useState('menu')
   const [text, setText] = useState('')
   const [numbering, setNumbering] = useState(false)
   const [startAt, setStartAt] = useState('1')
   const [tagMode, setTagMode] = useState('add')
   const [busy, setBusy] = useState(false)
+  const [autoNumber, setAutoNumber] = useState(true)
 
   useBackLayer(true, onClose)
   useBackLayer(step !== 'menu', () => setStep('menu'))
@@ -64,10 +65,15 @@ export function ActionSheet({ books, allTags, onClose, onDone, onEdit, notify })
   if (step === 'menu') {
     body = (
       <>
+        {books.some((b) => b.status === 'wishlist') && (
+          <Row label="Gekauft — ins Regal" sub="Status „Ungelesen“"
+            onClick={() => run(() => bulkSetStatus(books.filter((b) => b.status === 'wishlist').map((b) => b.id), 'owned'), 'Ins Regal gestellt')} />
+        )}
         <Row label="Auf die Wunschliste" onClick={() => run(() => bulkSetStatus(ids, 'wishlist'), `${n} ${word} auf der Wunschliste`)} />
         <Row label="Status ändern …" onClick={() => go('status')} />
         <Row label="Autor eintragen …" onClick={() => go('author')} />
         <Row label="Reihe eintragen …" onClick={() => go('series')} />
+        <Row label="Unterreihe eintragen …" sub="z. B. Witches innerhalb von Discworld" onClick={() => go('subseries')} />
         <Row label="Schlagwort …" onClick={() => go('tag')} />
         <Row label="Als Bilderbuch markieren" onClick={() => run(() => bulkTags(ids, 'Bilderbuch'), `${n} ${word} als Bilderbuch markiert`)} />
         <Row label="Sprache setzen …" onClick={() => go('lang')} />
@@ -125,6 +131,23 @@ export function ActionSheet({ books, allTags, onClose, onDone, onEdit, notify })
           onClick={() => run(() => bulkSetSeries(ids, ''), 'Reihe entfernt')}>Reihe entfernen</button>
       </>
     )
+  } else if (step === 'subseries') {
+    body = (
+      <>
+        <input className="search" value={text} onChange={(e) => setText(e.target.value)}
+          placeholder="Name der Unterreihe" list="sel-subs" autoFocus aria-label="Unterreihe" />
+        <datalist id="sel-subs">{allSubseries.map((t) => <option key={t} value={t} />)}</datalist>
+        <label className="continuous-toggle">
+          <input type="checkbox" checked={autoNumber} onChange={(e) => setAutoNumber(e.target.checked)} />
+          <span>Bände automatisch nummerieren
+            <small>nach der Reihenfolge in der Hauptreihe: die niedrigste Zahl dort wird Band 1</small></span>
+        </label>
+        <button className="btn btn-primary btn-block" disabled={!text.trim() || busy}
+          onClick={() => run(() => bulkSetSubseries(ids, text.trim(), autoNumber), 'Unterreihe eingetragen')}>Eintragen</button>
+        <button className="btn btn-quiet btn-block" disabled={busy}
+          onClick={() => run(() => bulkSetSubseries(ids, ''), 'Unterreihe entfernt')}>Unterreihe entfernen</button>
+      </>
+    )
   } else if (step === 'tag') {
     body = (
       <>
@@ -163,7 +186,7 @@ export function ActionSheet({ books, allTags, onClose, onDone, onEdit, notify })
   }
 
   const titles = {
-    menu: `${n} ${word}`, status: 'Status ändern', author: 'Autor eintragen', series: 'Reihe eintragen',
+    menu: `${n} ${word}`, status: 'Status ändern', author: 'Autor eintragen', series: 'Reihe eintragen', subseries: 'Unterreihe eintragen',
     tag: 'Schlagwort', lang: 'Sprache setzen', delete: 'Löschen'
   }
 

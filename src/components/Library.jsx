@@ -2,12 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
 import { SelectionContext } from '../lib/selection'
 import { SelectionBar, ActionSheet } from './SelectionBar'
+import SeriesGuide from './SeriesGuide'
+import FilterSheet from './FilterSheet'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, STATUS, STATUS_ORDER, updateBook } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import { BookCard } from './BookCard'
-import Home from './Home'
+import Home, { WishShelves } from './Home'
 
 /* Zeigt nach ein paar Sekunden einen Ausweg an, falls der Ladezustand hängt.
    Ein Ladekreis ohne Ende ist immer ein Fehler — spätestens hier bekommt man
@@ -230,6 +232,11 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
     if (!kidsTabEnabled && view === 'kids') setView('home')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kidsTabEnabled])
+  // Ohne Wunschlisten-Bücher gibt es den Reiter nicht — ist er gerade offen, zurück zum Start.
+  useEffect(() => {
+    if (nonKidsBooks && view === 'wish' && wishBooks.length === 0) setView('home')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nonKidsBooks, wishBooks.length])
   // Zurück-Geste von „Alle“ oder „Bilderbücher“ führt auf „Start“.
   useBackLayer(view !== 'home', () => setView('home'))
   const [density, setDensity] = useState(() => localStorage.getItem('libri:density') || 'grid')
@@ -240,7 +247,10 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
   const [status, setStatus] = useState('all')
   const [lang, setLang] = useState('all')
   const [tag, setTag] = useState('all')
-  const [series, setSeries] = useState('all')
+  const [series, setSeriesRaw] = useState('all')
+  const [sub, setSub] = useState('all')
+  // Wechselt die Reihe, gilt eine gewählte Unterreihe nicht mehr.
+  const setSeries = useCallback((v) => { setSeriesRaw(v); setSub('all') }, [])
   const [sort, setSort] = useState('addedAt')
   const [showFilters, setShowFilters] = useState(false)
 
@@ -258,12 +268,14 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
       if (lang !== 'all' && b.language !== lang) return false
       if (tag !== 'all' && !(b.tags || []).includes(tag)) return false
       if (series !== 'all' && b.series !== series) return false
+      if (sub !== 'all' && b.subseries !== sub) return false
       if (!q) return true
       return (
         b.title.toLowerCase().includes(q) ||
         (b.authors || []).join(' ').toLowerCase().includes(q) ||
         (b.tags || []).join(' ').toLowerCase().includes(q) ||
         (b.series || '').toLowerCase().includes(q) ||
+        (b.subseries || '').toLowerCase().includes(q) ||
         (b.isbn13 || '').includes(q) ||
         (b.description || '').toLowerCase().includes(q) ||
         (notesText.get(b.id) || '').includes(q)
@@ -285,7 +297,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
       return (b.addedAt || '').localeCompare(a.addedAt || '')
     })
     return list
-  }, [ownedBooks, notesText, query, status, lang, tag, series, sort])
+  }, [ownedBooks, notesText, query, status, lang, tag, series, sub, sort])
 
   if (loadError) {
     return (
@@ -336,16 +348,48 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
   const seriesNames = [...new Set(ownedBooks.map((b) => b.series).filter(Boolean))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
+  // Unterreihen — innerhalb der gewählten Reihe, sonst alle
+  const subNames = [...new Set(
+    ownedBooks.filter((b) => series === 'all' || b.series === series).map((b) => b.subseries).filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b, 'de'))
+  const allSubNames = [...new Set(ownedBooks.map((b) => b.subseries).filter(Boolean))].sort()
   const languages = [...new Set(ownedBooks.map((b) => b.language).filter(Boolean))].sort()
   const tags = [...new Set(ownedBooks.flatMap((b) => b.tags || []))].sort((a, b) =>
     a.localeCompare(b, 'de')
   )
 
-  const hasMoreFilters = seriesNames.length > 0 || tags.length > 0 || languages.length > 1
+  const hasMoreFilters = seriesNames.length > 0 || subNames.length > 0 || tags.length > 0 || languages.length > 1
   const activeCount =
-    (series !== 'all' ? 1 : 0) + (lang !== 'all' ? 1 : 0) + (tag !== 'all' ? 1 : 0)
+    (series !== 'all' ? 1 : 0) + (sub !== 'all' ? 1 : 0) + (lang !== 'all' ? 1 : 0) + (tag !== 'all' ? 1 : 0)
 
-  const letterList = withLetters(shown, sort)
+  // Ist genau eine Reihe gewählt, die Unterreihen hat, und keine davon:
+  // dann in Gruppen je Unterreihe zeigen (Gruppen nach dem ersten Band geordnet).
+  const groupBySub = series !== 'all' && sub === 'all' && sort === 'series' && subNames.length > 0
+  const groupedList = (() => {
+    if (!groupBySub) return null
+    const groups = new Map()
+    for (const b of shown) {
+      const key = b.subseries || ''
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key).push(b)
+    }
+    const first = (list) => Math.min(...list.map((b) => b.seriesIndex || 9999))
+    const ordered = [...groups.entries()].sort((a, b) => {
+      if (!a[0]) return 1 // ohne Unterreihe ans Ende
+      if (!b[0]) return -1
+      return first(a[1]) - first(b[1])
+    })
+    const out = []
+    for (const [name, list] of ordered) {
+      list.sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
+      out.push({ group: name || 'Weitere', count: list.length })
+      for (const b of list) out.push({ book: b })
+    }
+    return out
+  })()
+  const letterList = groupedList || withLetters(shown, sort)
+  // Bandnummer in der Unterreihe als Schild, sobald eine Reihe gewählt ist
+  const inSubView = series !== 'all' && subNames.length > 0
 
   // Was die Auswahl-Leiste unter „Alle“ bedeutet, hängt von der Ansicht ab.
   const visibleBooks =
@@ -374,6 +418,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
         <ActionSheet
           books={selectedBooks}
           allTags={tags}
+          allSubseries={allSubNames}
           notify={notify || (() => {})}
           onClose={() => setActionsOpen(false)}
           onDone={clearSelection}
@@ -389,13 +434,15 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
         </span>
       </div>
 
-      <div className="view-bar">
+      <div className={`view-bar${kidsTabEnabled ? ' has-kids' : ''}`}>
         <div className="view-toggle">
           <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
           <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
-          <button aria-pressed={view === 'wish'} onClick={() => setView('wish')}>
-            Wunschliste{wishBooks.length ? ` ${wishBooks.length}` : ''}
-          </button>
+          {wishBooks.length > 0 && (
+            <button aria-pressed={view === 'wish'} onClick={() => setView('wish')}>
+              Wunschliste {wishBooks.length}
+            </button>
+          )}
           {kidsTabEnabled && (
             <button aria-pressed={view === 'kids'} onClick={() => setView('kids')}>Bilderbücher</button>
           )}
@@ -424,17 +471,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
               <p>Noch nichts auf der Wunschliste. Scanne den Barcode eines Buchs, das du dir noch kaufen willst.</p>
             </div>
           ) : (
-            <div className="wish-list">
-              {wishBooks.map((b) => (
-                <div className="wish-row" key={b.id}>
-                  <BookCard book={b} layout="row" onOpen={open} onLongPress={hold} />
-                  <button className="btn btn-quiet" onClick={async () => {
-                    await updateBook(b.id, { status: 'owned' })
-                    notify?.(`„${b.title}“ ist jetzt im Regal`)
-                  }}>Gekauft</button>
-                </div>
-              ))}
-            </div>
+            <WishShelves books={wishBooks} onOpen={open} onLongPress={hold} />
           )}
         </>
       ) : view === 'kids' && kidsTabEnabled ? (
@@ -455,9 +492,6 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
           </div>
 
           <div className="filters-wrap chips-row">
-            <button className="chip" aria-pressed={status === 'all'} onClick={() => setStatus('all')}>
-              Alle
-            </button>
             {STATUS_ORDER.filter((s) => counts[s]).map((s) => (
               <button key={s} className="chip" aria-pressed={status === s}
                 onClick={() => setStatus(status === s ? 'all' : s)}>
@@ -472,67 +506,53 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
             )}
           </div>
 
-          {showFilters && (
-            <div className="filter-panel">
-              <label className="filter-row">
-                <span>Sortieren</span>
-                <select value={sort} onChange={(e) => setSort(e.target.value)}>
-                  {Object.entries(SORTS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </label>
-
-              {seriesNames.length > 0 && (
-                <div className="filter-group">
-                  <span className="filter-label">Reihe</span>
-                  <div className="filters-wrap">
-                    {seriesNames.map((s) => (
-                      <button key={s} className="chip" aria-pressed={series === s}
-                        onClick={() => {
-                          if (series === s) { setSeries('all') } else { setSeries(s); setSort('series') }
-                        }}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {languages.length > 1 && (
-                <div className="filter-group">
-                  <span className="filter-label">Sprache</span>
-                  <div className="filters-wrap">
-                    {languages.map((l) => (
-                      <button key={l} className="chip" aria-pressed={lang === l}
-                        onClick={() => setLang(lang === l ? 'all' : l)}>
-                        {languageName(l)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {tags.length > 0 && (
-                <div className="filter-group">
-                  <span className="filter-label">Schlagwörter</span>
-                  <div className="filters-wrap">
-                    {tags.map((t) => (
-                      <button key={t} className="chip" aria-pressed={tag === t}
-                        onClick={() => setTag(tag === t ? 'all' : t)}>
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeCount > 0 && (
-                <button className="btn btn-quiet" onClick={() => {
-                  setSeries('all'); setLang('all'); setTag('all')
-                }}>Filter zurücksetzen</button>
-              )}
+          {series !== 'all' && subNames.length > 0 && (
+            <div className="filters-wrap chips-row sub-chips">
+              <button className="chip" aria-pressed="true" onClick={() => setSeries('all')}
+                title="Reihe abwählen">
+                {series} ✕
+              </button>
+              {subNames.map((n) => (
+                <button key={n} className="chip" aria-pressed={sub === n}
+                  onClick={() => setSub(sub === n ? 'all' : n)}>{n}</button>
+              ))}
             </div>
+          )}
+
+          {series !== 'all' && <SeriesGuide series={series} />}
+
+          {showFilters && (
+            <FilterSheet
+              sortOptions={Object.entries(SORTS).map(([value, label]) => ({ value, label }))}
+              sort={sort}
+              onSort={setSort}
+              groups={[
+                {
+                  key: 'series', label: 'Reihe', value: series,
+                  options: seriesNames.map((n) => ({ value: n, label: n })),
+                  onChange: (v) => { setSeries(v); if (v !== 'all') setSort('series') }
+                },
+                {
+                  key: 'sub', label: 'Unterreihe', value: sub,
+                  options: subNames.map((n) => ({ value: n, label: n })),
+                  onChange: setSub
+                },
+                {
+                  key: 'lang', label: 'Sprache', value: lang,
+                  options: languages.length > 1 ? languages.map((l) => ({ value: l, label: languageName(l) })) : [],
+                  onChange: setLang
+                },
+                {
+                  key: 'tag', label: 'Schlagwörter', value: tag,
+                  options: tags.map((t) => ({ value: t, label: t })),
+                  onChange: setTag
+                }
+              ]}
+              activeCount={activeCount}
+              resultCount={shown.length}
+              onReset={() => { setSeries('all'); setSub('all'); setLang('all'); setTag('all') }}
+              onClose={() => setShowFilters(false)}
+            />
           )}
 
           {shown.length === 0 ? (
@@ -540,7 +560,11 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
           ) : density === 'list' ? (
             <div className="book-list">
               {letterList.map((item) =>
-                item.letter ? (
+                item.group ? (
+                  <div key={`G${item.group}`} className="letter-header group-header">
+                    {item.group} <small>{item.count}</small>
+                  </div>
+                ) : item.letter ? (
                   <div key={`L${item.letter}`} id={`letter-${item.letter}`} className="letter-header">
                     {item.letter}
                   </div>
@@ -553,13 +577,18 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
           ) : (
             <div className="cover-grid">
               {letterList.map((item) =>
-                item.letter ? (
+                item.group ? (
+                  <div key={`G${item.group}`} className="letter-header letter-header-grid group-header">
+                    {item.group} <small>{item.count}</small>
+                  </div>
+                ) : item.letter ? (
                   <div key={`L${item.letter}`} id={`letter-${item.letter}`}
                     className="letter-header letter-header-grid">
                     {item.letter}
                   </div>
                 ) : (
-                  <BookCard key={item.book.id} book={item.book} onOpen={open} onLongPress={hold} />
+                  <BookCard key={item.book.id} book={item.book} onOpen={open} onLongPress={hold}
+                    badge={inSubView && item.book.subseriesIndex ? `Band ${item.book.subseriesIndex}` : null} />
                 )
               )}
             </div>

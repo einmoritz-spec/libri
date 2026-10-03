@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { db } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db, pagesByMonth } from '../lib/db'
 import { Cover } from './ui'
 import YearReviewDetail from './YearReviewDetail'
 import { useBackLayer } from '../lib/backStack'
@@ -8,6 +9,7 @@ import { MONTHS } from '../lib/reviewData'
 export default function YearReview({ books, year, onClose, onOpenBook }) {
   const [quotes, setQuotes] = useState([])
   const [detail, setDetail] = useState(null)
+  const sessions = useLiveQuery(() => db.sessions.toArray(), [], [])
   useBackLayer(Boolean(detail), () => setDetail(null))
 
   // Alle Zitate, die in diesem Jahr angelegt wurden, samt zugehörigem Buch.
@@ -44,7 +46,8 @@ export default function YearReview({ books, year, onClose, onOpenBook }) {
       .sort((a, b) => a.finishedAt.localeCompare(b.finishedAt))
     if (!inYear.length) return null
 
-    const pages = inYear.reduce((s, b) => s + (b.pages || 0), 0)
+    // Gelesene Seiten des Jahres — auch aus Büchern, die noch nicht fertig sind.
+    const pages = pagesByMonth(books, sessions || [], year).reduce((a, b) => a + b, 0)
     const withPages = inYear.filter((b) => b.pages)
     const thickest = withPages.length
       ? withPages.reduce((a, b) => (b.pages > a.pages ? b : a))
@@ -69,7 +72,7 @@ export default function YearReview({ books, year, onClose, onOpenBook }) {
       topAuthor: topAuthorEntry ? { name: topAuthorEntry[0], count: topAuthorEntry[1] } : null,
       topMonth: perMonth[topMonthIdx] > 1 ? MONTHS[topMonthIdx] : null
     }
-  }, [books, year])
+  }, [books, sessions, year])
 
   return (
     <>
@@ -98,7 +101,7 @@ export default function YearReview({ books, year, onClose, onOpenBook }) {
             <div className="review-row">
               <button className="review-card review-tap" onClick={() => setDetail('pages')}>
                 <b>{stats.pages.toLocaleString('de-DE')}</b>
-                <span>Seiten</span>
+                <span>Seiten gelesen</span>
               </button>
               {stats.avgRating && (
                 <button className="review-card review-tap" onClick={() => setDetail('rating')}>

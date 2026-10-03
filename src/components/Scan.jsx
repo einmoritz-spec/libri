@@ -6,8 +6,9 @@ import {
   lookupIsbn, isBookBarcode, toIsbn13, fetchCoverBlob, dominantColor
 } from '../lib/metadata'
 import { findByIsbn, emptyBook } from '../lib/db'
+import { Icon } from './ui'
 
-export default function Scan({ onFound, onExisting, onManual, onWishlist, notify, sheetOpen, onBulk, wishMode, onLeaveWishMode }) {
+export default function Scan({ onFound, onExisting, onManual, notify, wishMode, onWishMode }) {
   const videoRef = useRef(null)
   const streamRef = useRef(null)
   const stopRef = useRef(null)
@@ -24,28 +25,12 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
   const [foundIsbn, setFoundIsbn] = useState(null)
   const [manualBusy, setManualBusy] = useState(false)
   const [retryIsbn, setRetryIsbn] = useState(null)
-  const [continuous, setContinuous] = useState(
-    () => localStorage.getItem('libri:continuousScan') === '1'
-  )
 
   useEffect(() => {
     hasNativeDetector().then((n) => setEngine(n ? 'nativ' : 'ZXing'))
     return () => teardown()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  // Fortlaufendes Scannen: Sobald das Formular oder die Detailansicht über
-  // diesem Bildschirm wieder zugeht, hier die Kamera von selbst neu starten,
-  // statt jedes Mal erneut "Kamera starten" antippen zu müssen.
-  const prevSheetOpen = useRef(sheetOpen)
-  useEffect(() => {
-    const wasOpen = prevSheetOpen.current
-    prevSheetOpen.current = sheetOpen
-    if (wasOpen && !sheetOpen && continuous && state === 'idle') {
-      start()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheetOpen, continuous])
 
   function teardown() {
     stopRef.current?.()
@@ -226,37 +211,18 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
   }
 
   return (
-    <div className="screen">
+    <div className="screen scan-screen">
       <div className="screen-head">
         <h1 className="wordmark">Scannen</h1>
-        {engine && <span className="count">{engine}</span>}
       </div>
 
-      {wishMode && (
-        <div className="notice">
-          <p><b>Wunschliste:</b> Gescannte Bücher kommen auf die Wunschliste.</p>
-          <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onLeaveWishMode}>
-            Doch ins Regal
-          </button>
-        </div>
-      )}
+      {/* Wohin neue Bücher kommen */}
+      <div className="view-toggle scan-mode" role="group" aria-label="Ziel">
+        <button aria-pressed={!wishMode} onClick={() => onWishMode(false)}>Ins Regal</button>
+        <button aria-pressed={Boolean(wishMode)} onClick={() => onWishMode(true)}>Wunschliste</button>
+      </div>
 
       {error && <div className="notice warn"><p>{error}</p></div>}
-
-      <label className="continuous-toggle">
-        <input
-          type="checkbox"
-          checked={continuous}
-          onChange={(e) => {
-            setContinuous(e.target.checked)
-            localStorage.setItem('libri:continuousScan', e.target.checked ? '1' : '0')
-          }}
-        />
-        <span>
-          Fortlaufend scannen
-          <small>Kamera startet nach jedem Buch von selbst neu</small>
-        </span>
-      </label>
 
       {/* Das <video> bleibt immer im DOM — sonst hat openCamera kein Ziel zum Anhängen. */}
       <div className="viewport">
@@ -264,7 +230,8 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
         {state === 'live' && <div className="reticle" />}
         {state === 'idle' && (
           <div className="viewport-idle">
-            <p>Halte den Barcode auf der Buchrückseite vor die Kamera.</p>
+            <span className="scan-glyph"><Icon name="scan" /></span>
+            <p>Barcode auf der Buchrückseite</p>
             <button className="btn btn-primary" onClick={start}>Kamera starten</button>
           </div>
         )}
@@ -272,35 +239,32 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
           <div className="viewport-idle scan-found">
             <span className="spinner" />
             <p className="scan-found-isbn">{foundIsbn}</p>
-            <p>Erkannt — wird nachgeschlagen…</p>
+            <p>Wird nachgeschlagen…</p>
           </div>
         )}
       </div>
 
       {state === 'live' && (
-        <>
-          <p className="hint">Barcode mittig halten. Erkennung läuft automatisch.</p>
-          <div className="scan-tools">
-            {canTorch && (
-              <button className="btn" onClick={async () => {
-                const ok = await setTorch(streamRef.current, !torchOn)
-                if (ok) setTorchOn(!torchOn)
-              }}>{torchOn ? 'Licht aus' : 'Licht an'}</button>
-            )}
-            <button className="btn" onClick={async () => {
-              const next = engine === 'ZXing' ? 'native' : 'zxing'
-              setForced(next)
-              stopRef.current?.()
-              stopRef.current = await startDetection(videoRef.current, handleCode, {
-                force: next, onEngine: setEngine
-              })
-              notify(`Erkennung auf ${next === 'zxing' ? 'ZXing' : 'nativ'} umgestellt`)
-            }}>Andere Erkennung</button>
-            <button className="btn" onClick={() => { teardown(); setState('idle') }}>
-              Kamera stoppen
-            </button>
-          </div>
-        </>
+        <div className="scan-tools">
+          {canTorch && (
+            <button className="btn btn-quiet" onClick={async () => {
+              const ok = await setTorch(streamRef.current, !torchOn)
+              if (ok) setTorchOn(!torchOn)
+            }}>{torchOn ? 'Licht aus' : 'Licht an'}</button>
+          )}
+          <button className="btn btn-quiet" onClick={async () => {
+            const next = engine === 'ZXing' ? 'native' : 'zxing'
+            setForced(next)
+            stopRef.current?.()
+            stopRef.current = await startDetection(videoRef.current, handleCode, {
+              force: next, onEngine: setEngine
+            })
+            notify(`Erkennung auf ${next === 'zxing' ? 'ZXing' : 'nativ'} umgestellt`)
+          }}>Andere Erkennung</button>
+          <button className="btn btn-quiet" onClick={() => { teardown(); setState('idle') }}>
+            Stoppen
+          </button>
+        </div>
       )}
 
       {retryIsbn && (
@@ -316,41 +280,21 @@ export default function Scan({ onFound, onExisting, onManual, onWishlist, notify
         </div>
       )}
 
-      <h2>ISBN eintippen</h2>
-      <div className="progress">
+      <form className="scan-isbn" onSubmit={(e) => { e.preventDefault(); if (manualIsbn && !manualBusy) submitManual() }}>
         <input
-          className="search"
-          style={{ flex: 1, width: 'auto', marginBottom: 0 }}
+          className="scan-isbn-input"
           inputMode="numeric"
-          placeholder="978…"
+          placeholder="ISBN eintippen"
           value={manualIsbn}
           onChange={(e) => setManualIsbn(e.target.value)}
           aria-label="ISBN eingeben"
         />
-        <button className="btn" onClick={submitManual} disabled={!manualIsbn || manualBusy}>
-          {manualBusy ? <span className="spinner" /> : 'Suchen'}
+        <button className="scan-isbn-go" type="submit" disabled={!manualIsbn || manualBusy} aria-label="Suchen">
+          {manualBusy ? <span className="spinner" /> : '→'}
         </button>
-      </div>
+      </form>
 
-      <h2>Mehrere auf einmal</h2>
-      <p className="hint" style={{ textAlign: 'left', margin: '0 0 10px' }}>
-        Ganze Reihe oder alles von einem Autor auf einmal aufnehmen, ohne jedes
-        Buch einzeln zu scannen.
-      </p>
-      <button className="btn btn-block" onClick={onBulk}>Mehrfach-Import öffnen</button>
-
-      <p className="hint" style={{ textAlign: 'left', marginTop: 20 }}>
-        Kein Barcode auf dem Buch?{' '}
-        <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onManual}>
-          Von Hand anlegen
-        </button>
-      </p>
-      <p className="hint" style={{ textAlign: 'left', marginTop: 4 }}>
-        Noch nicht im Besitz?{' '}
-        <button className="btn btn-quiet" style={{ padding: '2px 6px' }} onClick={onWishlist}>
-          Auf die Wunschliste
-        </button>
-      </p>
+      <button className="scan-link" onClick={onManual}>Kein Barcode? Von Hand anlegen</button>
     </div>
   )
 }

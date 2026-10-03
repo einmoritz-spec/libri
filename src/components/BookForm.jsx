@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
-import { STATUS, STATUS_ORDER } from '../lib/db'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db, STATUS, STATUS_ORDER } from '../lib/db'
 import { languageName, dominantColor } from '../lib/metadata'
 import { Cover } from './ui'
 // Der Zuschneider wird nur gebraucht, wenn wirklich ein Bild gewählt wurde.
@@ -9,6 +10,11 @@ const CoverCropper = lazy(() => import('./CoverCropper'))
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'nl', 'sv', 'pl', 'ru', 'la']
 
 export default function BookForm({ draft, title, submitLabel, onSave, onCancel, pending }) {
+  // Schon vergebene Unterreihen als Vorschläge
+  const knownSubseries = useLiveQuery(
+    async () => [...new Set((await db.books.toArray()).map((b) => b.subseries).filter(Boolean))].sort(),
+    []
+  )
   const [form, setForm] = useState({
     ...draft,
     authorsText: (draft.authors || []).join(', '),
@@ -107,6 +113,10 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       tags: tagsText.split(',').map((s) => s.trim()).filter(Boolean),
       pages: form.pages ? Number(form.pages) : null,
       series: (form.series || '').trim(),
+      subseries: (form.subseries || '').trim(),
+      subseriesIndex: (form.subseries || '').trim() && form.subseriesIndex !== '' && form.subseriesIndex != null
+        ? Number(form.subseriesIndex)
+        : null,
       seriesIndex: form.seriesIndex !== '' && form.seriesIndex !== null && form.seriesIndex !== undefined
         ? Number(form.seriesIndex)
         : null,
@@ -204,6 +214,22 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
           <label htmlFor="f-series-idx">Band</label>
           <input id="f-series-idx" type="number" inputMode="numeric" min="0" step="0.5"
             value={form.seriesIndex ?? ''} onChange={set('seriesIndex')} />
+        </div>
+      </div>
+
+      <div className="field-pair">
+        <div className="field" style={{ flex: 2 }}>
+          <label htmlFor="f-subseries">Unterreihe (optional)</label>
+          <input id="f-subseries" value={form.subseries || ''} onChange={set('subseries')}
+            list="f-subseries-list" placeholder="z. B. Witches, City Watch" />
+          <datalist id="f-subseries-list">
+            {(knownSubseries || []).map((n) => <option key={n} value={n} />)}
+          </datalist>
+        </div>
+        <div className="field" style={{ flex: 1 }}>
+          <label htmlFor="f-subseries-idx">Band</label>
+          <input id="f-subseries-idx" type="number" inputMode="numeric" min="0" step="0.5"
+            value={form.subseriesIndex ?? ''} onChange={set('subseriesIndex')} />
         </div>
       </div>
 

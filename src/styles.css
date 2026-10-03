@@ -330,7 +330,7 @@ h2 {
 
 .view-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
@@ -1971,11 +1971,6 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .wish-row .book-row { flex: 1; min-width: 0; border-bottom: 0; }
 .wish-row .btn { flex: none; padding: 7px 13px; font-size: 13px; }
 
-/* ---------- Zitat per Foto ---------- */
-.ocr-row { display: flex; align-items: center; gap: 10px; margin: -2px 0 12px; }
-.ocr-row .btn { display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; font-size: 13px; }
-.ocr-row svg { width: 16px; height: 16px; }
-.ocr-status { font-size: 12px; color: var(--dim); }
 .btn.is-disabled { opacity: 0.55; pointer-events: none; }
 
 /* ---------- Mehrfachauswahl ---------- */
@@ -2055,3 +2050,429 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .action-row:last-child { border-bottom: 0; }
 .action-sheet .search { margin-bottom: 10px; }
 .action-sheet .btn-block { margin-top: 6px; }
+
+/* Unterreihen: Gruppenköpfe in der Reihen-Ansicht und Auswahlzeile */
+.group-header { font-family: var(--serif); font-size: 17px; }
+.group-header small { font-family: var(--sans); font-size: 12px; color: var(--dim); margin-left: 6px; }
+.sub-chips { margin-top: -4px; }
+
+/* ---------- Lesereihenfolge-Übersicht ---------- */
+.guide-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 0 0 14px;
+  padding: 8px;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  color: inherit;
+  text-align: left;
+}
+.guide-card img {
+  width: 88px;
+  height: 64px;
+  flex: none;
+  object-fit: cover;
+  object-position: top left;
+  border-radius: 8px;
+  background: var(--raised);
+}
+.guide-card span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.guide-card b { font-family: var(--serif); font-size: 16px; }
+.guide-card small { font-size: 12px; color: var(--dim); }
+.guide-card .guide-hint { color: var(--lamp); }
+
+.guide-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  background: #14110d;
+}
+.guide-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: calc(env(safe-area-inset-top) + 6px) 10px 6px;
+  color: #f4ecd8;
+}
+.guide-bar .btn { color: inherit; padding: 8px 14px; font-size: 20px; }
+.guide-bar .btn:disabled { opacity: 0.35; }
+.guide-bar-title { flex: 1; font-weight: 500; }
+.guide-scroll {
+  flex: 1;
+  overflow: auto;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+.guide-scroll img { display: block; max-width: none; height: auto; user-select: none; }
+
+/* Tageszeit beim Nachtragen einer Lesesitzung */
+.period-chips { margin-top: 6px; }
+.field-hint { display: block; margin-top: 6px; font-size: 12px; color: var(--dim); }
+.session-period { color: var(--dim); font-size: 12px; }
+
+/* Reiter und Darstellungs-Umschalter in einer Zeile; nur mit dem
+   Bilderbücher-Reiter reicht der Platz nicht und der Umschalter rutscht nach unten. */
+.view-bar { gap: 8px; }
+.view-bar.has-kids { flex-wrap: wrap; }
+.view-bar .view-toggle button { padding: 6px 12px; white-space: nowrap; }
+.view-bar .view-toggle-icons button { padding: 0 11px; }
+
+/* ---------- Scannen: schlicht ---------- */
+.scan-mode { margin-bottom: 14px; }
+.scan-screen .viewport { width: 100%; height: 52vh; max-height: none; aspect-ratio: auto; border-radius: 22px; }
+.scan-glyph { color: var(--lamp); }
+.scan-glyph svg { width: 40px; height: 40px; }
+.scan-screen .viewport-idle { gap: 12px; }
+.scan-screen .viewport-idle p { font-size: 14px; }
+.scan-tools { margin-top: 10px; gap: 4px; }
+.scan-tools .btn { font-size: 13px; }
+
+.scan-isbn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-top: 18px;
+}
+.scan-isbn-input {
+  width: 100%;
+  height: 46px;
+  padding: 0 52px 0 18px;
+  background: var(--slate);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 15px;
+}
+.scan-isbn-input:focus { border-color: var(--lamp); outline: none; }
+.scan-isbn-go {
+  position: absolute;
+  right: 5px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--lamp);
+  color: var(--night);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.scan-isbn-go:disabled { opacity: 0.35; }
+.scan-link {
+  display: block;
+  margin: 18px auto 0;
+  padding: 6px 10px;
+  background: none;
+  border: 0;
+  color: var(--dim);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------- Statistik: Kacheln und Hinweis ---------- */
+.fact-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.fact-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.fact-tile.wide { grid-column: 1 / -1; }
+.fact-tile > span { font-size: 12px; color: var(--dim); }
+.fact-tile > b {
+  font-family: var(--serif);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fact-tile > small {
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Eine einzelne Kachel, die allein in der Zeile stehen würde */
+.fact-tiles .fact-tile:last-child:nth-child(odd):not(.wide) { grid-column: 1 / -1; }
+
+.notice-slim {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 16px 0 4px;
+  padding: 9px 14px;
+  background: none;
+  border: 1px dashed var(--lamp);
+  border-radius: 999px;
+  color: var(--ink, inherit);
+  font-size: 13px;
+  text-align: left;
+}
+.notice-slim i { font-style: normal; font-size: 18px; color: var(--lamp); line-height: 1; }
+
+.undated-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.undated-list { display: flex; flex-direction: column; }
+.undated-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.undated-row.is-picked { background: color-mix(in srgb, var(--lamp) 12%, transparent); }
+.undated-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+}
+.undated-check {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1.5px solid var(--line);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--night);
+}
+.undated-row.is-picked .undated-check { background: var(--lamp); border-color: var(--lamp); }
+.undated-cover { flex: none; width: 34px; }
+.undated-cover img, .undated-cover .cover-blank { width: 34px; height: 50px; object-fit: cover; border-radius: 3px; }
+.undated-text { display: flex; flex-direction: column; min-width: 0; }
+.undated-text b { font-family: var(--serif); font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.undated-text small { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.undated-date {
+  flex: none;
+  width: 118px;
+  padding: 7px 8px;
+  font-size: 13px;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--dim);
+}
+
+/* ---------- Einstellungen: schlicht ---------- */
+.settings-section { border-radius: 14px; }
+.settings-section summary { padding: 15px 18px; font-size: 16px; }
+.settings-section-body { padding: 6px 18px 16px; border-top: 0; }
+.settings-section-body > .btn-row { margin-top: 8px; }
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  font-size: 15px;
+}
+.setting-row + .setting-row { border-top: 1px solid var(--line); }
+
+.setting-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: var(--dim);
+}
+.setting-stack { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.setting-stack .btn { width: 100%; }
+.setting-result { margin: 0; font-size: 13px; color: var(--dim); text-align: center; }
+.setting-progress { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; font-size: 14px; }
+.settings-flag { margin: 0 0 12px; font-size: 13px; color: var(--lamp); }
+.settings-version { margin: 22px 0 0; font-size: 12px; color: var(--dim); text-align: center; }
+.settings-section-body .scan-isbn { margin-top: 8px; }
+
+/* ---------- Autor-Übersicht ---------- */
+.author-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 4px;
+  text-decoration-color: var(--lamp);
+}
+.author-title { font-size: 28px; }
+.sheet .cover-grid { margin-top: 4px; }
+
+/* ---------- Bewertung: zehn gleiche Felder in einer Zeile ---------- */
+.rating-row {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.rating-btn {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--dim);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+}
+.rating-btn[aria-pressed='true'] {
+  background: var(--lamp);
+  border-color: var(--lamp);
+  color: var(--night);
+  font-weight: 600;
+}
+
+/* ---------- Zitate & Notizen: Übersicht ---------- */
+.nv-summary { margin: 0 0 14px; font-size: 13px; color: var(--dim); }
+.nv-controls { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-bottom: 18px; }
+.nv-controls .view-toggle button { padding: 6px 11px; white-space: nowrap; }
+.nv-sections { display: flex; flex-direction: column; gap: 26px; }
+.nv-book {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+}
+.nv-cover { flex: none; width: 38px; }
+.nv-cover img, .nv-cover .cover-blank { width: 38px; height: 56px; object-fit: cover; border-radius: 4px; box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25); }
+.nv-book-text { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.nv-book-text b { font-family: var(--serif); font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nv-book-text small { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nv-count {
+  flex: none;
+  min-width: 26px;
+  padding: 2px 8px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.nv-month {
+  margin: 0 0 10px;
+  font-family: var(--serif);
+  font-size: 17px;
+  text-transform: none;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.nv-items { display: flex; flex-direction: column; gap: 10px; }
+.nv-item {
+  position: relative;
+  padding: 12px 14px;
+  background: var(--slate);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.nv-item.is-quote { border-left: 3px solid var(--lamp); border-radius: 4px 12px 12px 4px; }
+.nv-tag {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 1px 8px;
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.nv-text { margin: 0; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.nv-item.is-quote .nv-text { font-family: var(--serif); font-size: 15.5px; font-style: italic; }
+.nv-item.is-quote .nv-text::before { content: '\201E'; font-style: normal; color: var(--lamp); }
+.nv-item.is-quote .nv-text::after { content: '\201C'; font-style: normal; color: var(--lamp); }
+.nv-text.is-clamped { display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.nv-text mark { background: color-mix(in srgb, var(--lamp) 35%, transparent); color: inherit; border-radius: 3px; padding: 0 1px; }
+.nv-more { margin-top: 4px; padding: 0; background: none; border: 0; color: var(--lamp); font-size: 12px; }
+.nv-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-top: 8px; font-size: 11.5px; color: var(--dim); }
+.nv-foot > span { white-space: nowrap; flex: none; }
+.nv-foot > .nv-source { flex: 1 1 auto; }
+.nv-source { padding: 0; background: none; border: 0; color: var(--lamp); font-size: 11.5px; text-align: left; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.legend-sub { display: block; font-family: var(--sans); font-size: 12px; color: var(--dim); margin-top: 1px; }
+
+/* ---------- Filter-Blatt ---------- */
+.chip-s { padding: 4px 11px; font-size: 13px; }
+.fs-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+}
+.fs-sheet {
+  width: 100%;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--night);
+  border-radius: 20px 20px 0 0;
+  animation: sheet-in 0.22s var(--ease);
+}
+.fs-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px var(--pad) 8px;
+}
+.fs-head h2 { margin: 0; font-size: 20px; }
+.fs-body { flex: 1; overflow-y: auto; padding: 4px var(--pad) 12px; }
+.fs-group { padding: 12px 0; border-top: 1px solid var(--line); }
+.fs-group:first-child { border-top: 0; }
+.fs-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0 0 9px;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.fs-picked { font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--lamp); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fs-foot {
+  padding: 10px var(--pad) calc(env(safe-area-inset-bottom) + 14px);
+  border-top: 1px solid var(--line);
+  background: var(--night);
+}

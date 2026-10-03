@@ -43,14 +43,16 @@ function buildSections(books) {
   return { reading, wishlist, upNext, seriesList, standalone }
 }
 
-function Shelf({ title, sub, books, onOpen, onLongPress, badge }) {
+export function Shelf({ title, sub, books, onOpen, onLongPress, badge }) {
   if (!books.length) return null
   return (
     <section className="shelf-section">
-      <div className="shelf-section-head">
-        <h2>{title}</h2>
-        {sub && <span className="shelf-section-sub">{sub}</span>}
-      </div>
+      {title && (
+        <div className="shelf-section-head">
+          <h2>{title}</h2>
+          {sub && <span className="shelf-section-sub">{sub}</span>}
+        </div>
+      )}
       <div className="shelf-row-scroll">
         {books.map((b) => (
           <BookCard key={b.id} book={b} onOpen={onOpen} onLongPress={onLongPress}
@@ -58,6 +60,42 @@ function Shelf({ title, sub, books, onOpen, onLongPress, badge }) {
         ))}
       </div>
     </section>
+  )
+}
+
+/** Wunschliste: wie die Startseite nach Reihen geordnet, aber ohne
+    „Lese ich“ und „Als Nächstes“ — nur Reihen und einzelne Bücher. */
+export function WishShelves({ books, onOpen, onLongPress }) {
+  const { seriesList, standalone } = useMemo(() => {
+    const seriesMap = new Map()
+    for (const b of books) {
+      if (!b.series) continue
+      if (!seriesMap.has(b.series)) seriesMap.set(b.series, [])
+      seriesMap.get(b.series).push(b)
+    }
+    for (const list of seriesMap.values()) {
+      list.sort((a, b) => (a.seriesIndex || 0) - (b.seriesIndex || 0))
+    }
+    return {
+      seriesList: [...seriesMap.entries()].sort((a, b) => a[0].localeCompare(b[0], 'de')),
+      standalone: books.filter((b) => !b.series)
+    }
+  }, [books])
+
+  return (
+    <div className="home">
+      {seriesList.map(([name, list]) => (
+        <Shelf
+          key={name} title={name} sub={`${list.length} ${list.length === 1 ? 'Buch' : 'Bücher'}`}
+          books={list} onOpen={onOpen} onLongPress={onLongPress}
+          badge={(b) => (b.seriesIndex ? `Band ${b.seriesIndex}` : null)}
+        />
+      ))}
+      <Shelf
+        title={seriesList.length ? 'Einzelne Bücher' : null} books={standalone}
+        onOpen={onOpen} onLongPress={onLongPress}
+      />
+    </div>
   )
 }
 
@@ -80,10 +118,13 @@ export default function Home({ books, onOpen, onLongPress, onJumpToSeries }) {
     <div className="home">
       <Shelf title="Lese ich gerade" books={reading} onOpen={onOpen} onLongPress={onLongPress} />
 
-      <Shelf
-        title="Als Nächstes dran" books={upNext} onOpen={onOpen} onLongPress={onLongPress}
-        badge={(b) => b.seriesIndex ? `Band ${b.seriesIndex}` : null}
-      />
+      {/* In den Einstellungen schaltbar, standardmäßig aus */}
+      {localStorage.getItem('libri:upNext') === '1' && (
+        <Shelf
+          title="Als Nächstes dran" books={upNext} onOpen={onOpen} onLongPress={onLongPress}
+          badge={(b) => b.seriesIndex ? `Band ${b.seriesIndex}` : null}
+        />
+      )}
 
       <Shelf
         title="Wunschliste" sub={wishlist.length ? `${wishlist.length}` : null}
@@ -108,7 +149,19 @@ export default function Home({ books, onOpen, onLongPress, onJumpToSeries }) {
         )
       })}
 
-      <Shelf title="Einzelne Bücher" books={standalone} onOpen={onOpen} onLongPress={onLongPress} />
+      {standalone.length > 0 && (
+        <section className="shelf-section">
+          <div className="shelf-section-head">
+            <h2>Einzelne Bücher</h2>
+            <span className="shelf-section-sub">{standalone.length}</span>
+          </div>
+          <div className="cover-grid">
+            {standalone.map((b) => (
+              <BookCard key={b.id} book={b} onOpen={onOpen} onLongPress={onLongPress} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   )
 }

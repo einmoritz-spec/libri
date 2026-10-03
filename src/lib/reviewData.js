@@ -10,7 +10,8 @@ export const MONTHS = [
 // wie dunklem Hintergrund lesbar bleiben.
 export const PALETTE = [
   '#c9862b', '#b5533c', '#5d8850', '#3f7c85', '#7a5a8c',
-  '#a89031', '#8a6f4d', '#c9705f', '#4f6d9a', '#7d9a57'
+  '#a89031', '#8a6f4d', '#c9705f', '#4f6d9a', '#7d9a57',
+  '#9b4f6a', '#d4a14a', '#5a7b6b', '#b88a6a', '#6d6f9c'
 ]
 export const OTHER_COLOR = '#9a8b78'
 
@@ -57,6 +58,57 @@ export function pageSegments(books, maxSingle = 10) {
     segKey: i < singles.length ? String(b.id) : 'rest',
     color: i < singles.length ? PALETTE[i % PALETTE.length] : OTHER_COLOR,
     share: total ? b.pages / total : 0
+  }))
+  return { segments, rows, total, missing }
+}
+
+/** Seiten je Autor — dieselbe Form wie pageSegments, nur nach Autoren
+    zusammengefasst. Bei mehreren Autoren eines Buchs werden die Seiten
+    gleichmäßig verteilt, damit die Summe stimmt. */
+export function authorSegments(books, { alwaysShown = 15, minShare = 0.01 } = {}) {
+  const withPages = books.filter((b) => b.pages > 0)
+  const total = withPages.reduce((s, b) => s + b.pages, 0)
+  const missing = books.length - withPages.length
+
+  const map = new Map()
+  for (const b of withPages) {
+    const names = b.authors?.length ? b.authors : ['Unbekannt']
+    for (const name of names) {
+      if (!map.has(name)) map.set(name, { name, pages: 0, count: 0 })
+      const e = map.get(name)
+      e.pages += b.pages / names.length
+      e.count += 1
+    }
+  }
+  const list = [...map.values()]
+    .map((e) => ({ ...e, pages: Math.round(e.pages) }))
+    .sort((a, b) => b.pages - a.pages || a.name.localeCompare(b.name, 'de'))
+
+  // Die ersten 15 bekommen immer ein eigenes Stück. Danach nur noch, wer
+  // mindestens ein Prozent hat; der Rest wird zu einem grauen Stück gebündelt.
+  const sumAll = list.reduce((s, e) => s + e.pages, 0)
+  const singles = list.filter((e, i) => i < alwaysShown || (sumAll && e.pages / sumAll >= minShare))
+  const rest = list.slice(singles.length)
+
+  const segments = singles.map((e, i) => ({
+    key: e.name, label: e.name, value: e.pages, color: PALETTE[i % PALETTE.length]
+  }))
+  if (rest.length) {
+    segments.push({
+      key: 'rest',
+      label: `${rest.length} weitere ${rest.length === 1 ? 'Autor' : 'Autoren'}`,
+      value: rest.reduce((s, e) => s + e.pages, 0),
+      color: OTHER_COLOR
+    })
+  }
+  const sum = segments.reduce((s, x) => s + x.value, 0)
+  for (const s of segments) s.share = sum ? s.value / sum : 0
+
+  const rows = list.map((e, i) => ({
+    ...e,
+    segKey: i < singles.length ? e.name : 'rest',
+    color: i < singles.length ? PALETTE[i % PALETTE.length] : OTHER_COLOR,
+    share: sum ? e.pages / sum : 0
   }))
   return { segments, rows, total, missing }
 }

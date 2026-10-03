@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
-import { sessionsFor, addSession, updateSession, deleteSession } from '../lib/db'
+import { sessionsFor, addSession, updateSession, deleteSession, PERIODS, periodOf } from '../lib/db'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
@@ -15,6 +15,7 @@ function formatDay(iso) {
 function Editor({ initial, onSave, onCancel }) {
   const [date, setDate] = useState(initial?.date || todayStr())
   const [pages, setPages] = useState(initial?.pages ?? '')
+  const [period, setPeriod] = useState(initial ? periodOf(initial) : null)
 
   return (
     <div className="note-editor">
@@ -30,9 +31,25 @@ function Editor({ initial, onSave, onCancel }) {
             value={pages} onChange={(e) => setPages(e.target.value)} autoFocus />
         </div>
       </div>
+      <div className="field">
+        <label>Tageszeit</label>
+        <div className="filters-wrap period-chips" role="group" aria-label="Tageszeit">
+          {PERIODS.map((p) => (
+            <button key={p.key} type="button" className="chip" aria-pressed={period === p.key}
+              onClick={() => setPeriod(period === p.key ? null : p.key)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <small className="field-hint">
+          {period
+            ? PERIODS.find((p) => p.key === period).hours
+            : 'Optional — ohne Angabe zählt die Sitzung nicht in „Wann du liest“.'}
+        </small>
+      </div>
       <div className="btn-row">
         <button className="btn btn-primary" disabled={!pages || Number(pages) <= 0}
-          onClick={() => onSave({ date, pages })}>Sichern</button>
+          onClick={() => onSave({ date, pages, period })}>Sichern</button>
         <button className="btn btn-quiet" onClick={onCancel}>Abbrechen</button>
       </div>
     </div>
@@ -94,7 +111,10 @@ export default function SessionLog({ book, notify }) {
         ) : (
           <div className="fact-row" key={s.id} style={{ cursor: 'pointer' }}
             onClick={() => setEditing(s)}>
-            <span>{formatDay(s.date)}</span>
+            <span>
+              {formatDay(s.date)}
+              {periodOf(s) && <small className="session-period"> · {PERIODS.find((p) => p.key === periodOf(s)).label}</small>}
+            </span>
             <span style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
               <b>{s.pages} Seiten</b>
               <button

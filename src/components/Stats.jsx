@@ -1,10 +1,11 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
-import { db } from '../lib/db'
+import { db, hasRealTime, pagesReadTotal, pagesByMonth, isUndated } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import NotesSearch from './NotesSearch'
 import YearReview from './YearReview'
+import UndatedBooks from './UndatedBooks'
 import { useBackLayer } from '../lib/backStack'
 
 const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
@@ -56,7 +57,25 @@ function MonthChart({ values, unit }) {
   )
 }
 
-export default function Stats({ onOpenBook }) {
+/** Kennzahlen als Kacheln. Ein Wert steht immer in einer Zeile (zu lange
+    Titel werden gekürzt); was dazugehört, steht klein darunter. */
+function Facts({ items }) {
+  return (
+    <div className="fact-tiles">
+      {items.filter(Boolean).map((it) => (
+        <div key={it.label} className={`fact-tile${it.wide ? ' wide' : ''}`}>
+          <span>{it.label}</span>
+          <b title={String(it.value)}>{it.value}</b>
+          {it.sub && <small title={it.sub}>{it.sub}</small>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function Stats({ onOpenBook, notify = () => {} }) {
+  const [undatedOpen, setUndatedOpen] = useState(false)
+  useBackLayer(undatedOpen, () => setUndatedOpen(false))
   const [notesOpen, setNotesOpen] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
   useBackLayer(notesOpen, () => setNotesOpen(false))
@@ -98,17 +117,21 @@ export default function Stats({ onOpenBook }) {
     // würde beim Nachtragen vieler alter Bücher auf einmal aber alles auf
     // einen Tag zusammenstauchen. Siehe BookDetail: "Gelesen von … bis".
     const withDate = read.filter((b) => b.finishedAt && b.datesConfirmed)
-    const years = [...new Set(withDate.map((b) => Number(b.finishedAt.slice(0, 4))))]
-      .sort((a, b) => b - a)
+    // Auch Jahre, in denen nur Seiten gelesen wurden (Sitzungen), aber noch kein Buch fertig wurde.
+    const years = [...new Set([
+      ...withDate.map((b) => Number(b.finishedAt.slice(0, 4))),
+      ...(sessions || []).filter((x) => x.date).map((x) => Number(x.date.slice(0, 4)))
+    ])].sort((a, b) => b - a)
 
     const inYear = withDate.filter((b) => Number(b.finishedAt.slice(0, 4)) === year)
     const booksPerMonth = Array(12).fill(0)
     const pagesPerMonth = Array(12).fill(0)
     for (const b of inYear) {
-      const m = Number(b.finishedAt.slice(5, 7)) - 1
-      booksPerMonth[m]++
-      pagesPerMonth[m] += b.pages || 0
+      booksPerMonth[Number(b.finishedAt.slice(5, 7)) - 1]++
     }
+    // Seiten kommen aus den eingetragenen Sitzungen, damit auch ein noch
+    // nicht beendetes Buch sofort mitzählt.
+    pagesByMonth(books, sessions || [], year).forEach((v, i) => { pagesPerMonth[i] = v })
 
     // Lesedauer nur für Bücher, bei denen beide Daten gepflegt sind.
     const durations = read
@@ -133,9 +156,7 @@ export default function Stats({ onOpenBook }) {
       : null
     const best = rated.length ? rated.reduce((a, b) => (b.rating > a.rating ? b : a)) : null
 
-    const pagesRead =
-      read.reduce((s, b) => s + (b.pages || 0), 0) +
-      reading.reduce((s, b) => s + (b.currentPage || 0), 0)
+    const pagesRead = pagesReadTotal(books)
 
     const byLang = {}
     for (const b of books) {
@@ -150,20 +171,22 @@ export default function Stats({ onOpenBook }) {
     }
 
     return {
-      total: books.length, read, reading, unread, years, inYear,
+      total: owned.length, read, reading, unread, years, inYear,
       booksPerMonth, pagesPerMonth, avgDays, longest, avgRating, best,
       pagesRead,
       shelfPages: owned.reduce((s, b) => s + (b.pages || 0), 0),
       langRows: Object.entries(byLang).sort((a, b) => b[1] - a[1]).slice(0, 6),
       yearRows: Object.entries(byYear).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 6),
-      undated: read.length - withDate.length
+      undated: books.filter(isUndated).length,
+      fastest: durations.length ? durations.reduce((a, b) => (b.days < a.days ? b : a)) : null
     }
-  }, [books, year])
+  }, [books, sessions, year])
 
   const timeData = useMemo(() => {
     if (!sessions || !sessions.length) return null
-    const withTime = sessions.filter((s) => s.at)
-    if (!withTime.length) return null
+    // Nur Sitzungen mit echter Uhrzeit sagen etwas über die Tageszeit; der
+    // Wochentag lässt sich bei allen aus dem Datum ablesen.
+    const withTime = sessions.filter(hasRealTime)
 
     const dayparts = [
       ['Morgens', (h) => h >= 5 && h < 11],
@@ -181,8 +204,8 @@ export default function Stats({ onOpenBook }) {
 
     const WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
     const byWeekday = WEEKDAYS.map((l) => [l, 0])
-    for (const s of withTime) {
-      const jsDay = new Date(s.at).getDay() // 0 = Sonntag
+    for (const s of sessions) {
+      const jsDay = new Date(`${s.date}T12:00:00`).getDay() // 0 = Sonntag
       const idx = jsDay === 0 ? 6 : jsDay - 1
       byWeekday[idx][1] += s.pages || 0
     }
@@ -266,7 +289,7 @@ export default function Stats({ onOpenBook }) {
         </div>
       </div>
 
-      {d.years.length > 0 && (
+      {(d.years.length > 0 || d.pagesPerMonth.some((v) => v > 0)) && (
         <>
           <div className="stats-year-head">
             <h2>Lesejahr</h2>
@@ -277,9 +300,11 @@ export default function Stats({ onOpenBook }) {
             </div>
           </div>
 
-          <button className="btn btn-block" style={{ marginBottom: 14 }} onClick={() => setReviewOpen(true)}>
-            Dein Lesejahr {year} ansehen →
-          </button>
+          {d.inYear.length > 0 && (
+            <button className="btn btn-block" style={{ marginBottom: 14 }} onClick={() => setReviewOpen(true)}>
+              Dein Lesejahr {year} ansehen →
+            </button>
+          )}
 
           {reviewOpen && (
             <YearReview books={books} year={year} onClose={() => setReviewOpen(false)} onOpenBook={onOpenBook} />
@@ -312,38 +337,29 @@ export default function Stats({ onOpenBook }) {
       {(d.avgDays || d.longest || d.best) && (
         <>
           <h2>Bemerkenswertes</h2>
-          <div className="facts-list">
-            {d.avgDays && (
-              <div className="fact-row">
-                <span>Durchschnittlich pro Buch</span>
-                <b>{d.avgDays} {d.avgDays === 1 ? 'Tag' : 'Tage'}</b>
-              </div>
-            )}
-            {d.longest && (
-              <div className="fact-row">
-                <span>Dickstes gelesenes Buch</span>
-                <b>{d.longest.title} · {d.longest.pages} S.</b>
-              </div>
-            )}
-            {d.best && (
-              <div className="fact-row">
-                <span>Bestbewertet</span>
-                <b>{d.best.title} · {d.best.rating}/10</b>
-              </div>
-            )}
-          </div>
+          <Facts items={[
+            d.avgDays && { label: 'Ø pro Buch', value: `${d.avgDays} ${d.avgDays === 1 ? 'Tag' : 'Tage'}` },
+            d.fastest && {
+              label: 'Schnellstes Buch',
+              value: `${d.fastest.days} ${d.fastest.days === 1 ? 'Tag' : 'Tage'}`,
+              sub: d.fastest.book.title
+            },
+            d.longest && {
+              label: 'Dickstes Buch', wide: true, value: d.longest.title,
+              sub: `${d.longest.pages.toLocaleString('de-DE')} Seiten`
+            },
+            d.best && { label: 'Bestbewertet', wide: true, value: d.best.title, sub: `${d.best.rating}/10` }
+          ]} />
         </>
       )}
 
       {d.undated > 0 && (
-        <div className="notice" style={{ marginTop: 18 }}>
-          <p>
-            <b>{d.undated} {d.undated === 1 ? 'Buch hat' : 'Bücher haben'} noch kein bestätigtes Lesedatum</b>{' '}
-            und {d.undated === 1 ? 'fehlt' : 'fehlen'} deshalb im Jahresverlauf. Öffne das Buch und bestätige
-            oder ändere „Gelesen von … bis“, dann zählt es mit.
-          </p>
-        </div>
+        <button className="notice-slim" onClick={() => setUndatedOpen(true)}>
+          <span>{d.undated} {d.undated === 1 ? 'Buch' : 'Bücher'} ohne Lesedatum</span>
+          <i aria-hidden="true">›</i>
+        </button>
       )}
+      {undatedOpen && <UndatedBooks onClose={() => setUndatedOpen(false)} notify={notify} />}
 
       {d.yearRows.length > 1 && (
         <>
@@ -356,30 +372,12 @@ export default function Stats({ onOpenBook }) {
         <>
           <h2>Wann du liest</h2>
           {(timeData.longest > 0) && (
-            <div className="facts-list" style={{ marginBottom: 16 }}>
-              {timeData.current > 1 && (
-                <div className="fact-row">
-                  <span>Aktuelle Lesesträhne</span>
-                  <b>{timeData.current} Tage am Stück</b>
-                </div>
-              )}
-              <div className="fact-row">
-                <span>Längste Lesesträhne</span>
-                <b>{timeData.longest} {timeData.longest === 1 ? 'Tag' : 'Tage'}</b>
-              </div>
-              {timeData.topDaypart && (
-                <div className="fact-row">
-                  <span>Liest du am liebsten</span>
-                  <b>{timeData.topDaypart}</b>
-                </div>
-              )}
-              {timeData.topWeekday && (
-                <div className="fact-row">
-                  <span>Stärkster Wochentag</span>
-                  <b>{timeData.topWeekday}</b>
-                </div>
-              )}
-            </div>
+            <Facts items={[
+              timeData.current > 1 && { label: 'Streak aktuell', value: `${timeData.current} Tage` },
+              { label: 'Längster Streak', value: `${timeData.longest} ${timeData.longest === 1 ? 'Tag' : 'Tage'}` },
+              timeData.topDaypart && { label: 'Lieblingszeit', value: timeData.topDaypart },
+              timeData.topWeekday && { label: 'Bester Wochentag', value: timeData.topWeekday }
+            ]} />
           )}
 
           <p className="filter-label">Seiten nach Tageszeit</p>
@@ -390,8 +388,9 @@ export default function Stats({ onOpenBook }) {
 
           {timeData.untimed > 0 && (
             <p className="hint" style={{ textAlign: 'left', marginTop: 10 }}>
-              {timeData.untimed} ältere {timeData.untimed === 1 ? 'Eintrag zählt' : 'Einträge zählen'}{' '}
-              hier nicht mit — die Uhrzeit wird erst seit diesem Update mitgespeichert.
+              {timeData.untimed} {timeData.untimed === 1 ? 'Sitzung hat' : 'Sitzungen haben'} keine Tageszeit und{' '}
+              {timeData.untimed === 1 ? 'zählt' : 'zählen'} nur beim Wochentag mit. Im Buch unter „Lesesitzungen“
+              lässt sich die Tageszeit nachtragen.
             </p>
           )}
         </>

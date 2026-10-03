@@ -7,9 +7,9 @@ import Scan from './components/Scan'
 // Start heruntergeladen und ausgeführt werden muss.
 const Stats = lazy(() => import('./components/Stats'))
 const Settings = lazy(() => import('./components/Settings'))
-const BulkAdd = lazy(() => import('./components/BulkAdd'))
 const QuickEdit = lazy(() => import('./components/QuickEdit'))
 import BookDetail from './components/BookDetail'
+import AuthorView from './components/AuthorView'
 import BookForm from './components/BookForm'
 import { Icon, Toast } from './components/ui'
 import DbGate, { useDbStatus } from './components/DbGate'
@@ -30,7 +30,7 @@ export default function App() {
   const [draftUnknown, setDraftUnknown] = useState(false)
   const [draftPending, setDraftPending] = useState(null)
   const [scanWish, setScanWish] = useState(false)
-  const [bulkOpen, setBulkOpen] = useState(false)
+  const [authorName, setAuthorName] = useState(null)
   const [quickId, setQuickId] = useState(null)
   const [toast, setToast] = useState(null)
 
@@ -119,8 +119,8 @@ export default function App() {
     localStorage.setItem('libri:libview', 'home')
     setTab('library')
   })
-  useBackLayer(Boolean(bulkOpen), () => setBulkOpen(false))
   useBackLayer(Boolean(quickId), () => setQuickId(null))
+  useBackLayer(Boolean(authorName), () => setAuthorName(null))
   useBackLayer(Boolean(draft), () => setDraft(null))
   useBackLayer(Boolean(openId), () => setOpenId(null))
 
@@ -153,11 +153,9 @@ export default function App() {
 
       {tab === 'scan' && (
         <Scan
-          sheetOpen={Boolean(openId || draft || bulkOpen)}
-          onBulk={() => setBulkOpen(true)}
           notify={notify}
           wishMode={scanWish}
-          onLeaveWishMode={() => setScanWish(false)}
+          onWishMode={setScanWish}
           onFound={(book, unknown, pending) => {
             setDraftUnknown(unknown)
             setDraftPending(pending || null)
@@ -170,12 +168,7 @@ export default function App() {
           onManual={() => {
             setDraftUnknown(false)
             setDraftPending(null)
-            setDraft(emptyBook())
-          }}
-          onWishlist={() => {
-            setDraftUnknown(false)
-            setDraftPending(null)
-            setDraft(emptyBook({ status: 'wishlist' }))
+            setDraft(scanWish ? emptyBook({ status: 'wishlist' }) : emptyBook())
           }}
         />
       )}
@@ -183,21 +176,13 @@ export default function App() {
       <Suspense fallback={
         <div className="screen"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
       }>
-        {tab === 'stats' && <Stats onOpenBook={openBookById} />}
+        {tab === 'stats' && <Stats onOpenBook={openBookById} notify={notify} />}
         {tab === 'settings' && <Settings notify={notify} />}
       </Suspense>
 
       {quickBook && (
         <Suspense fallback={null}>
           <QuickEdit book={quickBook} onClose={() => setQuickId(null)} notify={notify} />
-        </Suspense>
-      )}
-
-      {bulkOpen && (
-        <Suspense fallback={
-          <div className="sheet"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
-        }>
-          <BulkAdd onClose={() => setBulkOpen(false)} notify={notify} />
         </Suspense>
       )}
 
@@ -217,8 +202,16 @@ export default function App() {
         />
       )}
 
+      {/* Vor der Detailansicht eingeordnet: ein von hier geöffnetes Buch liegt darüber. */}
+      {authorName && (
+        <AuthorView name={authorName} onClose={() => setAuthorName(null)} onOpen={(b) => setOpenId(b.id)} />
+      )}
+
       {openBook && (
-        <BookDetail book={openBook} onClose={closeSheets} notify={notify} />
+        <BookDetail
+          book={openBook} onClose={closeSheets} notify={notify}
+          onAuthor={(name) => { setOpenId(null); setAuthorName(name) }}
+        />
       )}
 
       <Toast message={toast} />

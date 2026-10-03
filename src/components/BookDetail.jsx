@@ -33,7 +33,7 @@ function formatDate(iso) {
   })
 }
 
-export default function BookDetail({ book, onClose, notify }) {
+export default function BookDetail({ book, onClose, notify, onAuthor }) {
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -48,7 +48,8 @@ export default function BookDetail({ book, onClose, notify }) {
     rating: book.rating,
     startedAt: book.startedAt,
     finishedAt: book.finishedAt,
-    datesConfirmed: book.datesConfirmed
+    datesConfirmed: book.datesConfirmed,
+    readBefore: book.readBefore
   })
 
   // Änderungen von außen übernehmen, ohne gerade Getipptes zu überschreiben.
@@ -203,10 +204,24 @@ export default function BookDetail({ book, onClose, notify }) {
           <div>
             <h1 className="detail-title">{book.title}</h1>
             {book.subtitle && <p className="detail-author">{book.subtitle}</p>}
-            <p className="detail-author">{book.authors?.join(', ') || 'Autor unbekannt'}</p>
+            <p className="detail-author">
+              {book.authors?.length ? book.authors.map((a, i) => (
+                <span key={a}>
+                  {i > 0 && ', '}
+                  {onAuthor ? (
+                    <button className="author-link" onClick={() => onAuthor(a)}>{a}</button>
+                  ) : a}
+                </span>
+              )) : 'Autor unbekannt'}
+            </p>
             {book.series && (
               <p className="detail-author">
                 {book.series}{book.seriesIndex ? ` · Band ${book.seriesIndex}` : ''}
+              </p>
+            )}
+            {book.subseries && (
+              <p className="detail-author">
+                {book.subseries}{book.subseriesIndex ? ` · Band ${book.subseriesIndex}` : ''}
               </p>
             )}
             <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
@@ -289,29 +304,22 @@ export default function BookDetail({ book, onClose, notify }) {
       {local.status === 'read' && (
         <>
           <h2>Bewertung</h2>
-          <div className="btn-row">
+          <div className="rating-row" role="group" aria-label="Bewertung von 1 bis 10">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-              <button key={n} className="btn btn-rating"
-                style={n === local.rating
-                  ? { borderColor: 'var(--lamp)', color: 'var(--lamp)' }
-                  : undefined}
+              <button key={n} className="rating-btn" aria-pressed={n === local.rating}
                 onClick={() => apply({ rating: n === local.rating ? null : n })}>
                 {n}
               </button>
             ))}
           </div>
           <h2>Gelesen von … bis</h2>
-          <p className="hint" style={{ textAlign: 'left', margin: '0 0 10px' }}>
-            Nachträglich anpassbar — wichtig für die Statistik, wenn du ein Buch
-            schon vor längerem gelesen hast.
-          </p>
           <div className="field-pair">
             <div className="field">
               <label htmlFor="d-start">Angefangen</label>
               <input id="d-start" type="date" max={toDateInput(local.finishedAt) || undefined}
                 value={toDateInput(local.startedAt)}
                 onChange={(e) => apply({
-                  startedAt: fromDateInput(e.target.value), datesConfirmed: true
+                  startedAt: fromDateInput(e.target.value), datesConfirmed: true, readBefore: false
                 })} />
             </div>
             <div className="field">
@@ -319,7 +327,7 @@ export default function BookDetail({ book, onClose, notify }) {
               <input id="d-end" type="date"
                 value={toDateInput(local.finishedAt)}
                 onChange={(e) => apply({
-                  finishedAt: fromDateInput(e.target.value), datesConfirmed: true
+                  finishedAt: fromDateInput(e.target.value), datesConfirmed: true, readBefore: false
                 })} />
             </div>
           </div>
@@ -344,6 +352,13 @@ export default function BookDetail({ book, onClose, notify }) {
                 'Zählt jetzt in der Statistik'
               )}>Datum stimmt — für Statistik übernehmen</button>
             </div>
+          )}
+
+          {!(local.finishedAt && local.datesConfirmed) && (
+            <button className="btn btn-quiet" style={{ marginTop: 8 }}
+              onClick={() => apply({ readBefore: !local.readBefore })}>
+              {local.readBefore ? '✓ Vor dem Tracking gelesen' : 'Vor dem Tracking gelesen'}
+            </button>
           )}
 
           <button className="btn" style={{ marginTop: 8 }} onClick={() => apply(
