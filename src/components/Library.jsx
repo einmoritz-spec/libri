@@ -254,6 +254,10 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
   const [sort, setSort] = useState('addedAt')
   const [showFilters, setShowFilters] = useState(false)
 
+  // Wechselt die Ansicht oder die Reihe, beginnt die Seite oben — sonst bleibt
+  // man bei der Scrollposition der vorigen Ansicht stehen.
+  useEffect(() => { window.scrollTo(0, 0) }, [view, series])
+
   const jumpToSeries = useCallback((name) => {
     setSeries(name)
     setSort('series')
