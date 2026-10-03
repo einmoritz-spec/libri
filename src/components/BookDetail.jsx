@@ -68,37 +68,22 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   }, [book])
 
   // Regler-Wert für die Anzeige während des Ziehens; geschrieben wird erst
-  // beim Loslassen (siehe sliderRef-Effekt unten) oder per "Seite merken".
+  // per "Speichern" (Plus/Minus und Schnellwahl ändern nur den Entwurf).
 
   // Müssen vor jedem früheren return stehen — sonst ruft die Komponente je
   // nach Zustand (Bearbeiten an/aus) unterschiedlich viele Hooks auf, und
   // React bricht mit Fehler #300 ab.
   const [finishing, setFinishing] = useState(false)
   const [celebration, setCelebration] = useState(null)
-  const sliderRef = useRef(null)
-  // Feld für die Seitenzahl: beim Antippen leer zum Tippen, geschrieben wird
-  // erst bei ausdrücklicher Bestätigung (Knopf oder Enter) — nie beim bloßen
-  // Verlassen des Felds. Müssen ebenfalls vor jedem früheren return stehen.
-  const [pageInputActive, setPageInputActive] = useState(false)
-  const [pageInput, setPageInput] = useState('')
+  // Seiteneingabe: erst anpassen (Plus/Minus, Schnellwahl, tippen), dann einmal
+  // sichern — dadurch entsteht genau eine Lesesitzung statt einer pro Antippen.
+  const [draftPage, setDraftPage] = useState(String(book.currentPage || 0))
   const [coverZoomed, setCoverZoomed] = useState(false)
   useBackLayer(editing, () => setEditing(false))
   useBackLayer(coverZoomed, () => setCoverZoomed(false))
   const coverSrc = useCoverSrc(book)
-  /* Reglers Commit läuft über das native "change"-Ereignis, nicht über
-     Reacts onChange: Bei <input type="range"> verhält sich Reacts onChange
-     wie das native "input"-Ereignis und feuert bei jeder Zwischenposition
-     während des Ziehens — genau das erzeugte bisher pro Bewegung eine
-     eigene Lesesitzung. Das native "change" feuert dagegen nur einmal, beim
-     Loslassen oder nach einer Tastatur-Anpassung. commitPage ist unten als
-     function-Deklaration definiert und dadurch schon hier nutzbar (Hoisting). */
-  useEffect(() => {
-    const el = sliderRef.current
-    if (!el) return
-    const onRelease = () => commitPage(Number(el.value))
-    el.addEventListener('change', onRelease)
-    return () => el.removeEventListener('change', onRelease)
-  })
+  // Nach dem Sichern (oder wenn sich der Stand von außen ändert) das Feld nachziehen.
+  useEffect(() => { setDraftPage(String(local.currentPage)) }, [local.currentPage])
 
   if (editing) {
     return (
@@ -127,12 +112,6 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   const page = local.currentPage
   const pct = book.pages ? Math.min(100, Math.round((page / book.pages) * 100)) : 0
 
-  /** Nur die Anzeige aktualisieren, ohne zu schreiben — für jede
-      Zwischenposition beim Ziehen und für die Zifferneingabe. */
-  function previewPage(value) {
-    setLocal((l) => ({ ...l, currentPage: Math.max(0, Math.min(value, book.pages || value)) }))
-  }
-
   /** Tatsächlich schreiben — erzeugt genau eine Lesesitzung. Wird nur beim
       Loslassen des Reglers, per Zahleneingabe-Knopf oder bei den
       Sprung-Knöpfen aufgerufen, nie bei jeder Zwischenposition. */
@@ -142,15 +121,18 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
     setProgress(book, clamped).catch(() => notify('Speichern hat nicht geklappt.'))
   }
 
-  /** Wertet das Eingabefeld aus und schreibt nur, wenn wirklich eine Zahl
-      eingetippt wurde — leeres Feld oder bloßes Antippen ohne Eingabe lösen
-      nichts aus. */
-  function confirmPageInput() {
-    if (pageInput.trim() === '') return
-    const n = Number(pageInput)
-    if (Number.isNaN(n)) return
-    commitPage(n)
-    notify('Seite gemerkt')
+  // Entwurf der Seitenzahl: geklemmt auf 0 … Seitenzahl des Buchs
+  const clampPage = (n) => Math.max(0, Math.min(Math.round(n), book.pages || Math.round(n)))
+  const draftNum = draftPage === '' ? NaN : Number(draftPage)
+  const draftValid = !Number.isNaN(draftNum)
+  const target = draftValid ? clampPage(draftNum) : page
+  const pageDelta = target - page
+  const dirty = draftValid && target !== page
+
+  function savePage() {
+    if (!dirty) return
+    commitPage(target)
+    notify(pageDelta > 0 ? `+${pageDelta} ${pageDelta === 1 ? 'Seite' : 'Seiten'} gemerkt` : 'Seite gemerkt')
   }
 
   function apply(changes, message) {
@@ -252,45 +234,34 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
 
       {local.status !== 'read' && local.status !== 'wishlist' && (
         <>
-          {book.pages ? (
-            <>
-              <p className="hint" style={{ textAlign: 'left', margin: '0 0 8px' }}>
-                Seite {page} von {book.pages} — {pct}%
-              </p>
+          <div className="pg">
+            <div className="pg-top">
+              <span>Seite <b>{page}</b>{book.pages ? ` von ${book.pages}` : ''}</span>
+              {book.pages ? <span>{pct} %</span> : null}
+            </div>
+            {book.pages ? (
+              <div className="pg-bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
+            ) : null}
+
+            <div className="pg-entry">
               <input
-                ref={sliderRef}
-                className="page-slider"
-                type="range" min="0" max={book.pages} value={page}
-                onChange={(e) => previewPage(Number(e.target.value))}
-                style={{ '--fill': `${pct}%` }}
+                className="pg-input"
+                type="number" inputMode="numeric" min="0" max={book.pages || undefined}
+                value={draftPage}
+                onFocus={(e) => e.target.select()}
+                onChange={(e) => setDraftPage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { savePage(); e.target.blur() } }}
                 aria-label="Aktuelle Seite"
               />
-            </>
-          ) : (
-            <p className="hint" style={{ textAlign: 'left' }}>
-              Ohne Seitenzahl gibt es keinen Fortschrittsbalken. Trag sie unter Bearbeiten nach.
-            </p>
-          )}
-
-          <div className="progress-actions">
-            <input
-              className="page-input"
-              type="number" inputMode="numeric" min="0" max={book.pages || undefined}
-              value={pageInputActive ? pageInput : page}
-              placeholder="Seite"
-              onFocus={() => { setPageInputActive(true); setPageInput('') }}
-              onChange={(e) => setPageInput(e.target.value)}
-              onBlur={() => setPageInputActive(false)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { confirmPageInput(); e.target.blur() } }}
-              aria-label="Seite eingeben"
-            />
-            <button className="btn" onMouseDown={(e) => e.preventDefault()} onClick={confirmPageInput}>
-              Seite merken
-            </button>
-            <button className="btn btn-primary" onClick={finishBook} disabled={finishing}>
-              {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
-            </button>
+              <button className="btn btn-primary" onClick={savePage} disabled={!dirty}>
+                {dirty && pageDelta > 0 ? `Speichern · +${pageDelta}` : 'Speichern'}
+              </button>
+            </div>
           </div>
+
+          <button className="btn btn-block" style={{ marginTop: 10 }} onClick={finishBook} disabled={finishing}>
+            {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
+          </button>
           {local.status !== 'reading' && (
             <button className="btn btn-quiet" style={{ marginTop: 6, padding: '6px 4px' }}
               onClick={() => apply(
