@@ -102,13 +102,12 @@ export default function SeriesGuide({ series }) {
   if (!guide) return null
   return (
     <>
-      <button className="guide-card" onClick={() => setOpen(true)}>
-        <img src={guide.thumb} alt="" />
-        <span>
-          <b>{guide.title}</b>
-          <small>{guide.sub}</small>
-          <small className="guide-hint">Antippen zum Vergrößern</small>
-        </span>
+      <button className="guide-link" onClick={() => setOpen(true)}>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+          <path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z" /><path d="M9 4v14M15 6v14" />
+        </svg>
+        {guide.title}
+        <i aria-hidden="true">›</i>
       </button>
       {open && <Viewer guide={guide} onClose={() => setOpen(false)} />}
     </>

@@ -1,10 +1,7 @@
-import { lazy, Suspense, useRef, useState } from 'react'
-import { useBackLayer } from '../lib/backStack'
+import { useRef, useState } from 'react'
 import { updateBook } from '../lib/db'
-import { dominantColor } from '../lib/metadata'
+import { dominantColor, prepareCoverFile } from '../lib/metadata'
 import { Cover } from './ui'
-
-const CoverCropper = lazy(() => import('./CoverCropper'))
 
 /* Schnellbearbeitung: nur die drei Dinge, die beim Erfassen am häufigsten
    fehlen. Für alles Weitere gibt es die volle Detailansicht. */
@@ -12,21 +9,14 @@ export default function QuickEdit({ book, onClose, notify }) {
   const [pages, setPages] = useState(book.pages ?? '')
   const [tagsText, setTagsText] = useState((book.tags || []).join(', '))
   const [coverBlob, setCoverBlob] = useState(undefined) // undefined = unverändert
-  const [cropping, setCropping] = useState(null)
-  useBackLayer(Boolean(cropping), () => setCropping(null))
   const [saving, setSaving] = useState(false)
   const fileRef = useRef(null)
   const cameraRef = useRef(null)
 
-  function pick(e) {
+  async function pick(e) {
     const f = e.target.files?.[0]
     e.target.value = ''
-    if (f) setCropping(f)
-  }
-
-  async function applyCrop(blob) {
-    setCoverBlob(blob)
-    setCropping(null)
+    if (f) setCoverBlob(await prepareCoverFile(f))
   }
 
   async function save() {
@@ -43,16 +33,6 @@ export default function QuickEdit({ book, onClose, notify }) {
     onClose()
     notify('Gespeichert')
     updateBook(book.id, changes).catch(() => notify('Speichern hat nicht geklappt.'))
-  }
-
-  if (cropping) {
-    return (
-      <Suspense fallback={
-        <div className="sheet"><p className="hint"><span className="spinner" /> Bild wird vorbereitet…</p></div>
-      }>
-        <CoverCropper file={cropping} onDone={applyCrop} onCancel={() => setCropping(null)} />
-      </Suspense>
-    )
   }
 
   // Vorschau: frisch gewähltes Bild hat Vorrang vor dem gespeicherten.

@@ -790,6 +790,33 @@ export async function fetchCoverBlob(url) {
   }
 }
 
+/** Übernimmt ein selbst gewähltes Bild unverändert als Cover: kein
+    Zuschneiden, kein Rand. Nur sehr große Fotos (z. B. direkt aus der Kamera)
+    werden verkleinert, damit die Bibliothek nicht unnötig groß wird. Das
+    Seitenverhältnis bleibt dabei erhalten. */
+export async function prepareCoverFile(file) {
+  const MAX = 1000
+  let bitmap
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' })
+    const longEdge = Math.max(bitmap.width, bitmap.height)
+    if (longEdge <= MAX && file.size < 700 * 1024) return file
+    const scale = Math.min(1, MAX / longEdge)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(bitmap.width * scale)
+    canvas.height = Math.round(bitmap.height * scale)
+    const ctx = canvas.getContext('2d')
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.9))
+    return blob || file
+  } catch {
+    return file
+  } finally {
+    bitmap?.close?.()
+  }
+}
+
 /** Schneidet schwarze Balken am Rand eines Covers ab. Sie entstehen, wenn ein
     Bild nicht das Buchformat hat und irgendwo mit Schwarz aufgefüllt wurde.
     Das Bild behält dann einfach sein eigenes Format. Bewusst vorsichtig:

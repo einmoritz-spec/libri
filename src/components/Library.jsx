@@ -251,6 +251,8 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
   const [sub, setSub] = useState('all')
   // Wechselt die Reihe, gilt eine gewählte Unterreihe nicht mehr.
   const setSeries = useCallback((v) => { setSeriesRaw(v); setSub('all') }, [])
+  // Reihen-Ansicht: Zurück führt erst zurück zu „Alle“, danach zu „Start“.
+  useBackLayer(view === 'all' && series !== 'all', () => setSeries('all'))
   const [sort, setSort] = useState('addedAt')
   const [showFilters, setShowFilters] = useState(false)
 
@@ -441,7 +443,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
       <div className={`view-bar${kidsTabEnabled ? ' has-kids' : ''}`}>
         <div className="view-toggle">
           <button aria-pressed={view === 'home'} onClick={() => setView('home')}>Start</button>
-          <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Alle</button>
+          <button aria-pressed={view === 'all'} onClick={() => (view === 'all' && series !== 'all' ? setSeries('all') : setView('all'))}>Alle</button>
           {wishBooks.length > 0 && (
             <button aria-pressed={view === 'wish'} onClick={() => setView('wish')}>
               Wunschliste {wishBooks.length}
@@ -495,6 +497,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
             />
           </div>
 
+          {series === 'all' && (
           <div className="filters-wrap chips-row">
             {STATUS_ORDER.filter((s) => counts[s]).map((s) => (
               <button key={s} className="chip" aria-pressed={status === s}
@@ -509,18 +512,6 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
               </button>
             )}
           </div>
-
-          {series !== 'all' && subNames.length > 0 && (
-            <div className="filters-wrap chips-row sub-chips">
-              <button className="chip" aria-pressed="true" onClick={() => setSeries('all')}
-                title="Reihe abwählen">
-                {series} ✕
-              </button>
-              {subNames.map((n) => (
-                <button key={n} className="chip" aria-pressed={sub === n}
-                  onClick={() => setSub(sub === n ? 'all' : n)}>{n}</button>
-              ))}
-            </div>
           )}
 
           {series !== 'all' && <SeriesGuide series={series} />}

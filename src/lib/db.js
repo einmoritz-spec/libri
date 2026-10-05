@@ -864,10 +864,15 @@ export function pagesByMonth(books, sessions, year) {
 
 const dayKey = (d) => d.toISOString().slice(0, 10)
 
-/** Wie schnell du gerade liest, aus allen Sitzungen des letzten Monats bis
-    heute (über alle Bücher, nicht je Buch). Gerechnet wird in Seiten pro
+/** Wie schnell du gerade liest, aus allen Sitzungen der letzten 30 Tage
+    (über alle Bücher, nicht je Buch). Gerechnet wird in Seiten pro
     Kalendertag, also mit den Tagen ohne Lesen — nur so ergibt sich eine
     brauchbare Schätzung, wann ein Buch fertig wird.
+
+    Der heutige Tag zählt nicht in den Schnitt, weil er noch nicht vorbei ist;
+    sonst würde ein früher Nachmittag das Tempo drücken. Stattdessen steht
+    todayPages getrennt zur Verfügung: was heute schon gelesen ist, verbraucht
+    einen Teil des Tagesbudgets (siehe estimateFinish).
 
     Weicht das Tempo der letzten sieben Tage stark vom Monatsschnitt ab
     (um mehr als ein Drittel), zählt das jüngste Tempo stärker. */
@@ -882,21 +887,23 @@ export async function readingPace(now = new Date()) {
     d.setDate(d.getDate() - n)
     return dayKey(d)
   }
+  const yesterday = daysAgo(1)
   const first = dated.reduce((m, r) => (r.date < m ? r.date : m), today)
-  const spanDays = Math.min(30, Math.round((new Date(today) - new Date(first)) / 86400000) + 1)
-  // Weniger als drei Tage Daten sind zu wenig für eine Aussage.
+  // Vollständige Tage seit der ersten Sitzung, höchstens 30
+  const spanDays = Math.min(30, Math.round((new Date(yesterday) - new Date(first)) / 86400000) + 1)
+  // Weniger als drei vollständige Tage sind zu wenig für eine Aussage.
   if (spanDays < 3) return null
 
-  const from30 = daysAgo(29)
-  const from7 = daysAgo(6)
-  const inMonth = dated.filter((r) => r.date >= from30 && r.date <= today)
-  const monthPages = inMonth.reduce((a, r) => a + (r.pages || 0), 0)
+  const sum = (list) => list.reduce((a, r) => a + (r.pages || 0), 0)
+  const from30 = daysAgo(30)
+  const from7 = daysAgo(7)
+  const done = dated.filter((r) => r.date >= from30 && r.date <= yesterday)
+  const monthPages = sum(done)
   if (monthPages <= 0) return null
   const monthPace = monthPages / spanDays
 
   const recentDays = Math.min(7, spanDays)
-  const recentPages = inMonth.filter((r) => r.date >= from7).reduce((a, r) => a + (r.pages || 0), 0)
-  const recentPace = recentPages / recentDays
+  const recentPace = sum(done.filter((r) => r.date >= from7)) / recentDays
 
   // Der Vergleich lohnt erst, wenn es mehr als eine Woche Vorlauf gibt.
   let pace = monthPace
@@ -909,9 +916,10 @@ export async function readingPace(now = new Date()) {
     }
   }
 
-  // Seiten je Tag für die kleine Grafik
+  // Seiten je Tag für die kleine Grafik (mit heute)
+  const inWindow = dated.filter((r) => r.date >= daysAgo(29) && r.date <= today)
   const perDay = new Map()
-  for (const r of inMonth) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.pages || 0))
+  for (const r of inWindow) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.pages || 0))
   const series = []
   for (let i = 29; i >= 0; i--) {
     const k = daysAgo(i)
@@ -923,20 +931,34 @@ export async function readingPace(now = new Date()) {
     monthPace, recentPace,
     trend,                      // 'faster' | 'slower' | null
     spanDays,
+    todayPages: perDay.get(today) || 0,
     activeDays: perDay.size,
     series
   }
 }
 
-/** Schätzung für ein Buch: Rest der Seiten geteilt durch das aktuelle Tempo. */
+/** Schätzung für ein Buch aus dem Tempo und dem, was heute schon gelesen ist.
+
+    Heute bleibt vom Tagesschnitt nur der Rest übrig (Tempo minus heute schon
+    gelesen), jeder weitere Tag bringt ein volles Tempo. Fehlen am Ende eines
+    Tages nur noch höchstens 10 % des Buchs, wird es voraussichtlich noch am
+    selben Tag zu Ende gelesen, statt die letzten Seiten liegen zu lassen.
+    Andernfalls ist der nächste Tag dran. */
 export function estimateFinish(book, pace, now = new Date()) {
   if (!pace || !book.pages) return null
   const left = Math.max(0, book.pages - (book.currentPage || 0))
   if (!left) return null
-  const days = Math.max(1, Math.ceil(left / pace.pace))
+  const p = pace.pace
+  const todayLeft = Math.max(0, p - (pace.todayPages || 0))
+  const tolerance = 0.1 * book.pages
+
+  let days = 400
+  for (let n = 0; n < 400; n++) {
+    if (todayLeft + n * p + tolerance >= left) { days = n; break }
+  }
   const date = new Date(now)
   date.setDate(date.getDate() + days)
-  return { left, days, date }
+  return { left, todayLeft: Math.round(todayLeft), days, date }
 }
 
 /* ---------- Leseverlauf ---------- */

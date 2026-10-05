@@ -1,11 +1,9 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react'
-import { useBackLayer } from '../lib/backStack'
+import { useEffect, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, STATUS, STATUS_ORDER } from '../lib/db'
-import { languageName, dominantColor } from '../lib/metadata'
+import { languageName, dominantColor, prepareCoverFile } from '../lib/metadata'
 import { Cover } from './ui'
 // Der Zuschneider wird nur gebraucht, wenn wirklich ein Bild gewählt wurde.
-const CoverCropper = lazy(() => import('./CoverCropper'))
 
 const LANGS = ['de', 'en', 'fr', 'es', 'it', 'nl', 'sv', 'pl', 'ru', 'la']
 
@@ -21,8 +19,6 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
     tagsText: (draft.tags || []).join(', ')
   })
   const [saving, setSaving] = useState(false)
-  const [cropping, setCropping] = useState(null)
-  useBackLayer(Boolean(cropping), () => setCropping(null))
   const [enriching, setEnriching] = useState(Boolean(pending))
   const touched = useRef(new Set())
   const fileRef = useRef(null)
@@ -84,17 +80,14 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
     setForm((f) => ({ ...f, [k]: e.target.value }))
   }
 
-  function pickCover(e) {
+  async function pickCover(e) {
     const file = e.target.files?.[0]
     e.target.value = ''
-    if (file) setCropping(file)
-  }
-
-  async function applyCrop(blob) {
+    if (!file) return
+    const blob = await prepareCoverFile(file)
     const color = await dominantColor(blob)
     touched.current.add('cover')
     setForm((f) => ({ ...f, coverBlob: blob, coverUrl: null, spineColor: color || f.spineColor }))
-    setCropping(null)
   }
 
   function removeCover() {
@@ -125,20 +118,6 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
     })
     // Kein setSaving(false) — das Formular ist danach ohnehin geschlossen,
     // und ein Zustandswechsel auf einer verschwindenden Ansicht bringt nichts.
-  }
-
-  if (cropping) {
-    return (
-      <Suspense fallback={
-        <div className="sheet"><p className="hint"><span className="spinner" /> Bild wird vorbereitet…</p></div>
-      }>
-        <CoverCropper
-          file={cropping}
-          onDone={applyCrop}
-          onCancel={() => setCropping(null)}
-        />
-      </Suspense>
-    )
   }
 
   return (

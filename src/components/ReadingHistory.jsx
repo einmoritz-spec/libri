@@ -28,6 +28,10 @@ function Spark({ series }) {
 const fmtDate = (d) =>
   d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' })
 
+/** „heute“, „morgen“, „übermorgen“ oder „in N Tagen“. */
+const whenWord = (days) =>
+  days === 0 ? 'heute' : days === 1 ? 'morgen' : days === 2 ? 'übermorgen' : `in ${days} Tagen`
+
 export default function ReadingHistory({ book }) {
   const [own, setOwn] = useState(undefined)
   const [pace, setPace] = useState(undefined)
@@ -61,17 +65,19 @@ export default function ReadingHistory({ book }) {
         <div className="facts-list">
           <div className="fact-row">
             <span>Dein Tempo</span>
-            <b>{perDay} Seiten pro Tag</b>
+            <b>{perDay} Seiten/Tag</b>
+            <small>heute schon {pace.todayPages}</small>
           </div>
           {est && (
             <>
               <div className="fact-row">
                 <span>Noch vor dir</span>
                 <b>{est.left} Seiten</b>
+                <small>{est.todayLeft > 0 ? `heute noch ca. ${Math.min(est.todayLeft, est.left)}` : 'Tagesziel erreicht'}</small>
               </div>
               <div className="fact-row">
                 <span>Voraussichtlich fertig</span>
-                <b>{fmtDate(est.date)} · in {est.days} {est.days === 1 ? 'Tag' : 'Tagen'}</b>
+                <b>{fmtDate(est.date)} · {whenWord(est.days)}</b>
               </div>
             </>
           )}
