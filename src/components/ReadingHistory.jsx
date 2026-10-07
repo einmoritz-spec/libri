@@ -66,14 +66,12 @@ export default function ReadingHistory({ book }) {
           <div className="fact-row">
             <span>Dein Tempo</span>
             <b>{perDay} Seiten/Tag</b>
-            <small>heute schon {pace.todayPages}</small>
           </div>
           {est && (
             <>
               <div className="fact-row">
                 <span>Noch vor dir</span>
                 <b>{est.left} Seiten</b>
-                <small>{est.todayLeft > 0 ? `heute noch ca. ${Math.min(est.todayLeft, est.left)}` : 'Tagesziel erreicht'}</small>
               </div>
               <div className="fact-row">
                 <span>Voraussichtlich fertig</span>
