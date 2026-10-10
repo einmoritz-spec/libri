@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
+import { audioTotal, fmtHM } from '../lib/audio'
 import { sessionsFor, addSession, updateSession, deleteSession, PERIODS, periodOf } from '../lib/db'
 
 function todayStr() {
@@ -66,7 +67,7 @@ export default function SessionLog({ book, notify }) {
   async function reload() {
     setRows(await sessionsFor(book.id))
   }
-  useEffect(() => { reload() }, [book.id])
+  useEffect(() => { reload() }, [book.id, book.currentPage])
 
   if (rows === undefined) return null
 
@@ -113,10 +114,11 @@ export default function SessionLog({ book, notify }) {
             onClick={() => setEditing(s)}>
             <span>
               {formatDay(s.date)}
+              {s.format && s.format !== 'print' && <small className="session-period"> · {s.format === 'ebook' ? 'eBook' : 'Hörbuch'}</small>}
               {periodOf(s) && <small className="session-period"> · {PERIODS.find((p) => p.key === periodOf(s)).label}</small>}
             </span>
             <span style={{ display: 'flex', gap: 10, alignItems: 'baseline' }}>
-              <b>{s.pages} Seiten</b>
+              <b>{s.format === 'audio' && book.pages ? (audioTotal(book) ? `${fmtHM((s.pages / book.pages) * audioTotal(book).min)} h` : `${Math.round((s.pages / book.pages) * 100)} %`) : `${s.pages} Seiten`}</b>
               <button
                 className="note-del"
                 onClick={(e) => {

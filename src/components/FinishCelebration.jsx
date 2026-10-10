@@ -25,7 +25,7 @@ export default function FinishCelebration({ book, nth, onRate, onDone, notify })
       <div className="celebrate-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="celebrate-cover"><Cover book={book} /></div>
 
-        <p className="celebrate-eyebrow">Fertig gelesen</p>
+        <p className="celebrate-eyebrow">{book.format === 'audio' ? 'Fertig gehört' : 'Fertig gelesen'}</p>
         <h2 className="celebrate-title">{book.title}</h2>
         <p className="celebrate-author">{book.authors?.[0] || ''}</p>
 
@@ -35,7 +35,7 @@ export default function FinishCelebration({ book, nth, onRate, onDone, notify })
               <b>{days === 0 ? '<1' : days}</b><span>{days === 1 ? 'Tag' : 'Tage'}</span>
             </div>
           )}
-          {book.pages && (
+          {book.pages && book.format !== 'audio' && (
             <div className="celebrate-fact">
               <b>{book.pages}</b><span>Seiten</span>
             </div>

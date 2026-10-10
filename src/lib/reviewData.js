@@ -29,6 +29,7 @@ export function formatPct(share) {
  * darin nicht vorkommen und werden nur gezählt.
  */
 export function pageSegments(books, maxSingle = 10) {
+  books = books.filter((b) => b.format !== 'audio') // Hörbücher haben keine Seiten
   const withPages = books.filter((b) => b.pages > 0).sort((a, b) => b.pages - a.pages)
   const total = withPages.reduce((s, b) => s + b.pages, 0)
   const missing = books.length - withPages.length
@@ -66,6 +67,7 @@ export function pageSegments(books, maxSingle = 10) {
     zusammengefasst. Bei mehreren Autoren eines Buchs werden die Seiten
     gleichmäßig verteilt, damit die Summe stimmt. */
 export function authorSegments(books, { alwaysShown = 15, minShare = 0.01 } = {}) {
+  books = books.filter((b) => b.format !== 'audio')
   const withPages = books.filter((b) => b.pages > 0)
   const total = withPages.reduce((s, b) => s + b.pages, 0)
   const missing = books.length - withPages.length
@@ -159,7 +161,7 @@ export function authorsRanking(books) {
       if (!map.has(name)) map.set(name, { name, books: [], pages: 0 })
       const e = map.get(name)
       e.books.push(b)
-      e.pages += b.pages || 0
+      if (b.format !== 'audio') e.pages += b.pages || 0
     }
   }
   const list = [...map.values()]

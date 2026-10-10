@@ -246,6 +246,16 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       </div>
 
       <div className="field">
+        <label htmlFor="f-format">Gelesen als</label>
+        <select id="f-format" value={form.format || ''} onChange={set('format')}>
+          <option value="">offen</option>
+          <option value="print">Buch</option>
+          <option value="ebook">eBook</option>
+          <option value="audio">Hörbuch</option>
+        </select>
+      </div>
+
+      <div className="field">
         <label htmlFor="f-pub">Verlag</label>
         <input id="f-pub" value={form.publisher || ''} onChange={set('publisher')} />
       </div>

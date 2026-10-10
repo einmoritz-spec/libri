@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { STATUS, setProgress, markFinished, updateBook, deleteBook, db } from '../lib/db'
+import { STATUS, setProgress, markFinished, updateBook, deleteBook, expandReads, db } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { Cover, useCoverSrc } from './ui'
 import BookForm from './BookForm'
@@ -9,6 +9,52 @@ import ReadingHistory from './ReadingHistory'
 import SessionLog from './SessionLog'
 import FinishCelebration from './FinishCelebration'
 import BookBlurb from './BookBlurb'
+import { audioTotal, fmtHM, parseHM, fetchRuntime } from '../lib/audio'
+
+export const FORMATS = { print: 'Buch', ebook: 'eBook', audio: 'Hörbuch' }
+
+function RereadSheet({ initialFormat, initialLang, onStart, onClose }) {
+  useBackLayer(true, onClose)
+  const [fmt, setFmt] = useState(initialFormat)
+  const [lang, setLang] = useState(initialLang)
+  return (
+    <div className="action-backdrop" onClick={onClose}>
+      <div className="action-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="action-head"><h2>Nochmal lesen oder hören</h2></div>
+        <p className="hint" style={{ textAlign: 'left', margin: '0 0 6px' }}>Wie?</p>
+        <div className="filters-wrap" role="group" aria-label="Format">
+          {Object.entries(FORMATS).map(([k, label]) => (
+            <button key={k} className="chip" aria-pressed={fmt === k} onClick={() => setFmt(k)}>{label}</button>
+          ))}
+        </div>
+        <p className="hint" style={{ textAlign: 'left', margin: '14px 0 6px' }}>Sprache</p>
+        <div className="filters-wrap" role="group" aria-label="Sprache">
+          {[['de', 'Deutsch'], ['en', 'Englisch']].map(([k, label]) => (
+            <button key={k} className="chip" aria-pressed={lang === k} onClick={() => setLang(k)}>{label}</button>
+          ))}
+        </div>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 18 }}
+          onClick={() => onStart({ format: fmt, lang })}>Starten</button>
+      </div>
+    </div>
+  )
+}
+
+function FormatSheet({ current, onPick, onClose }) {
+  useBackLayer(true, onClose)
+  return (
+    <div className="action-backdrop" onClick={onClose}>
+      <div className="action-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="action-head"><h2>Wie gelesen?</h2></div>
+        {Object.entries(FORMATS).map(([k, label]) => (
+          <button key={k} className="action-row" onClick={() => onPick(k)}>
+            <span>{label}{k === current ? ' ·  zuletzt' : ''}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /* Zwischen ISO-Zeitstempel und dem, was ein Datumsfeld erwartet (JJJJ-MM-TT),
    umrechnen. Uhrzeit spielt für Lesedaten keine Rolle. */
@@ -49,7 +95,11 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
     startedAt: book.startedAt,
     finishedAt: book.finishedAt,
     datesConfirmed: book.datesConfirmed,
-    readBefore: book.readBefore
+    readBefore: book.readBefore,
+    format: book.format || null,
+    ebookPages: book.ebookPages || null,
+    reads: book.reads || [],
+    readLanguage: book.readLanguage || null
   })
 
   // Änderungen von außen übernehmen, ohne gerade Getipptes zu überschreiben.
@@ -63,7 +113,11 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
       rating: book.rating,
       startedAt: book.startedAt,
       finishedAt: book.finishedAt,
-      datesConfirmed: book.datesConfirmed
+      datesConfirmed: book.datesConfirmed,
+      format: book.format || null,
+      ebookPages: book.ebookPages || null,
+      reads: book.reads || [],
+      readLanguage: book.readLanguage || null
     }))
   }, [book])
 
@@ -79,11 +133,44 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   // sichern — dadurch entsteht genau eine Lesesitzung statt einer pro Antippen.
   const [draftPage, setDraftPage] = useState(String(book.currentPage || 0))
   const [coverZoomed, setCoverZoomed] = useState(false)
+  const [pickFormat, setPickFormat] = useState(false)
+  const [rereading, setRereading] = useState(false)
+  const [setupTotal, setSetupTotal] = useState('')
+  // Einheit der Eingabe am eReader: Prozent oder Seitenzahl des Geräts
+  const [unit, setUnit] = useState(() => {
+    try { return localStorage.getItem('libri:ebookUnit') === 'S' ? 'S' : '%' } catch { return '%' }
+  })
+  // Einheit der Eingabe beim Hörbuch: Zeit (h:mm) oder Prozent
+  const [aunit, setAunit] = useState(() => {
+    try { return localStorage.getItem('libri:audioUnit') === '%' ? '%' : 'T' } catch { return 'T' }
+  })
   useBackLayer(editing, () => setEditing(false))
   useBackLayer(coverZoomed, () => setCoverZoomed(false))
+  useBackLayer(pickFormat, () => setPickFormat(false))
   const coverSrc = useCoverSrc(book)
   // Nach dem Sichern (oder wenn sich der Stand von außen ändert) das Feld nachziehen.
-  useEffect(() => { setDraftPage(String(local.currentPage)) }, [local.currentPage])
+
+  const clampPage = (n) => Math.max(0, Math.min(Math.round(n), book.pages || Math.round(n)))
+  /* eBook-Modus: Die Seitenzahlen eines eReaders weichen vom gedruckten Buch
+     ab. Eingegeben wird, was das Gerät zeigt (Prozent oder Geräte-Seite);
+     gespeichert wird immer die Seite des gedruckten Buchs, damit Statistik
+     und Tempo einheitlich bleiben. */
+  const ebook = local.format === 'ebook' && !!book.pages
+  // Hörbuch: nur Prozent, keine Seiten (intern trotzdem umgerechnet)
+  const audio = local.format === 'audio' && !!book.pages
+  const conv = ebook || audio
+  const aTotal = audio ? audioTotal(book) : null
+  const u = audio ? (aTotal ? aunit : '%') : unit
+  const total = local.ebookPages
+  const needTotal = ebook && u === 'S' && !total
+  const scale = conv ? (u === 'S' ? total : u === 'T' ? aTotal.min : 100) : null
+  const toPrint = (v) => (conv && scale ? clampPage((v / scale) * book.pages) : clampPage(v))
+  const fromPrint = (p) => (conv && scale ? Math.round((p / book.pages) * scale) : p)
+  const shown = fromPrint(local.currentPage || 0)
+  const fmtUnit = (v) => (u === 'T' ? fmtHM(v) : String(v))
+  const parseUnit = (str) => (u === 'T' ? parseHM(str) : (str === '' ? NaN : Number(str)))
+  const shownStr = fmtUnit(shown)
+  useEffect(() => { setDraftPage(shownStr) }, [shownStr, conv, u, total]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (editing) {
     return (
@@ -118,21 +205,50 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   function commitPage(value) {
     const clamped = Math.max(0, Math.min(value, book.pages || value))
     setLocal((l) => ({ ...l, currentPage: clamped }))
-    setProgress(book, clamped).catch(() => notify('Speichern hat nicht geklappt.'))
+    setProgress({ ...book, format: local.format || book.format || null }, clamped).catch(() => notify('Speichern hat nicht geklappt.'))
   }
 
   // Entwurf der Seitenzahl: geklemmt auf 0 … Seitenzahl des Buchs
-  const clampPage = (n) => Math.max(0, Math.min(Math.round(n), book.pages || Math.round(n)))
-  const draftNum = draftPage === '' ? NaN : Number(draftPage)
-  const draftValid = !Number.isNaN(draftNum)
-  const target = draftValid ? clampPage(draftNum) : page
+  const draftNum = draftPage === '' ? NaN : parseUnit(draftPage)
+  const draftValid = !Number.isNaN(draftNum) && !needTotal
+  const target = draftValid ? toPrint(draftNum) : page
   const pageDelta = target - page
-  const dirty = draftValid && target !== page
+  // Anzeige-Zuwachs in der Einheit der Eingabe (Prozent beim eReader/Hörbuch)
+  const unitDelta = conv ? Math.round(draftNum - shown) : pageDelta
+  const dirty = draftValid && draftPage !== shownStr && target !== page
 
   function savePage() {
     if (!dirty) return
     commitPage(target)
-    notify(pageDelta > 0 ? `+${pageDelta} ${pageDelta === 1 ? 'Seite' : 'Seiten'} gemerkt` : 'Seite gemerkt')
+    if (audio) notify(unitDelta > 0 ? `+${u === 'T' ? `${fmtHM(unitDelta)} h` : `${unitDelta} %`} gemerkt` : 'Fortschritt gemerkt')
+    else notify(pageDelta > 0 ? `+${pageDelta} ${pageDelta === 1 ? 'Seite' : 'Seiten'} gemerkt` : 'Seite gemerkt')
+  }
+
+  /** Neuen Durchgang beginnen: der bisherige wandert in `reads`, das Buch
+      steht wieder auf „Lese ich“ mit Seite 0. */
+  function startReread({ format, lang }) {
+    const previous = {
+      startedAt: local.startedAt || null,
+      finishedAt: local.finishedAt || null,
+      rating: local.rating || null,
+      format: local.format || null,
+      language: local.readLanguage || book.language || null,
+      datesConfirmed: !!local.datesConfirmed,
+      readBefore: !!local.readBefore
+    }
+    setRereading(false)
+    apply({
+      reads: [...(local.reads || []), previous],
+      status: 'reading',
+      currentPage: 0,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      rating: null,
+      datesConfirmed: false,
+      readBefore: false,
+      format,
+      readLanguage: lang === (book.language || 'de') ? null : lang
+    }, 'Neuer Durchgang gestartet')
   }
 
   function apply(changes, message) {
@@ -141,23 +257,22 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
     updateBook(book.id, changes).catch(() => notify('Speichern hat nicht geklappt.'))
   }
 
-  async function finishBook() {
+  async function finishBook(format) {
     const celebrateOn = localStorage.getItem('libri:celebrate') !== '0'
     if (!celebrateOn) {
       notify('Als gelesen abgelegt')
       onClose()
-      markFinished(book).catch(() => notify('Speichern hat nicht geklappt.'))
+      markFinished(book, format).catch(() => notify('Speichern hat nicht geklappt.'))
       return
     }
 
     setFinishing(true)
     try {
-      await markFinished(book)
+      await markFinished(book, format)
       const year = new Date().getFullYear()
-      const readThisYear = await db.books
-        .where('status').equals('read').toArray()
-        .then((list) => list.filter((b) => b.finishedAt?.slice(0, 4) === String(year)).length)
-      setLocal((l) => ({ ...l, status: 'read', finishedAt: new Date().toISOString() }))
+      const readThisYear = await db.books.toArray()
+        .then((all) => expandReads(all).filter((b) => b.status === 'read' && b.finishedAt?.slice(0, 4) === String(year)).length)
+      setLocal((l) => ({ ...l, status: 'read', format, finishedAt: new Date().toISOString() }))
       setCelebration({ nth: readThisYear })
     } catch {
       notify('Speichern hat nicht geklappt.')
@@ -168,6 +283,17 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
 
   return (
     <div className="sheet">
+      {rereading && (
+        <RereadSheet
+          initialFormat={local.format || 'print'}
+          initialLang={['de', 'en'].includes(local.readLanguage || book.language) ? (local.readLanguage || book.language) : 'de'}
+          onStart={startReread} onClose={() => setRereading(false)} />
+      )}
+      {pickFormat && (
+        <FormatSheet current={local.format || book.format}
+          onClose={() => setPickFormat(false)}
+          onPick={(f) => { setPickFormat(false); finishBook(f) }} />
+      )}
       <div className="sheet-bar">
         <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
         <button className="btn btn-quiet" onClick={() => setEditing(true)}>Bearbeiten</button>
@@ -206,15 +332,33 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
                 {book.subseries}{book.subseriesIndex ? ` · Band ${book.subseriesIndex}` : ''}
               </p>
             )}
-            <span className={`badge ${local.status}`}>{STATUS[local.status]}</span>
+            <span className={`badge ${local.status}`}>{STATUS[local.status]}{local.reads?.length ? (local.status === 'read' ? ` · ${local.reads.length + 1}×` : ` · ${local.reads.length + 1}. Mal`) : ''}</span>
           </div>
           <BookBlurb title={book.title} text={book.description} />
         </div>
       </div>
 
       <div className="facts">
-        {book.pages && <span><b>{book.pages}</b> Seiten</span>}
-        {book.language && <span>{languageName(book.language)}</span>}
+        {local.format === 'audio' && audioTotal(book)
+          ? <span><b>{audioTotal(book).est ? 'ca. ' : ''}{fmtHM(audioTotal(book).min)}</b> h</span>
+          : book.pages && <span><b>{book.pages}</b> Seiten</span>}
+        {local.status !== 'wishlist' && (
+          <button className="fmt-chip" aria-label="Format wechseln"
+            onClick={() => {
+              const order = ['print', 'ebook', 'audio']
+              const next = order[(order.indexOf(local.format || 'print') + 1) % 3]
+              apply({ format: next }, FORMATS[next])
+              // Beim Wechsel auf Hörbuch die echte Laufzeit still im Hintergrund holen
+              if (next === 'audio' && !(book.audioMinutes > 0) && !book.audioTried) {
+                fetchRuntime(book, local.readLanguage || book.language)
+                  .then((r) => (r.minutes
+                    ? updateBook(book.id, { audioMinutes: r.minutes })
+                    : r.notFound ? updateBook(book.id, { audioTried: true }) : null))
+                  .catch(() => {})
+              }
+            }}>{FORMATS[local.format || 'print']}</button>
+        )}
+        {book.language && <span>{languageName(local.readLanguage || book.language)}</span>}
         {book.year && <span>{book.year}</span>}
         {book.publisher && <span>{book.publisher}</span>}
       </div>
@@ -236,31 +380,70 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
         <>
           <div className="pg">
             <div className="pg-top">
-              <span>Seite <b>{page}</b>{book.pages ? ` von ${book.pages}` : ''}</span>
-              {book.pages ? <span>{pct} %</span> : null}
+              {audio && aTotal && u === 'T' ? (
+                <span><b>{fmtHM((pct / 100) * aTotal.min)}</b> von {aTotal.est ? 'ca. ' : ''}{fmtHM(aTotal.min)} h gehört</span>
+              ) : audio ? <span><b>{pct} %</b> gehört</span> : (
+                <span>Seite <b>{page}</b>{book.pages ? ` von ${book.pages}` : ''}</span>
+              )}
+              {book.pages && (!audio || u === 'T') ? <span>{pct} %</span> : null}
             </div>
             {book.pages ? (
               <div className="pg-bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
             ) : null}
 
-            <div className="pg-entry">
-              <input
-                className="pg-input"
-                type="number" inputMode="numeric" min="0" max={book.pages || undefined}
-                value={draftPage}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => setDraftPage(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { savePage(); e.target.blur() } }}
-                aria-label="Aktuelle Seite"
-              />
-              <button className="btn btn-primary" onClick={savePage} disabled={!dirty}>
-                {dirty && pageDelta > 0 ? `Speichern · +${pageDelta}` : 'Speichern'}
-              </button>
-            </div>
+            {needTotal && (
+              <div className="pg-entry" style={{ marginTop: 12 }}>
+                <input className="pg-input" type="number" inputMode="numeric" min="1"
+                  placeholder="Seiten im eReader" value={setupTotal}
+                  onChange={(e) => setSetupTotal(e.target.value)} aria-label="Seiten im eReader" />
+                <button className="btn btn-primary" disabled={!(Number(setupTotal) > 0)}
+                  onClick={() => { apply({ ebookPages: Math.round(Number(setupTotal)) }); setSetupTotal('') }}>
+                  Merken
+                </button>
+              </div>
+            )}
+            {!needTotal && (
+              <div className="pg-entry">
+                <div className="pg-field">
+                  <input
+                    className="pg-input"
+                    type={u === 'T' ? 'text' : 'number'} inputMode={u === 'T' ? 'decimal' : 'numeric'} min="0"
+                    max={conv && u !== 'T' ? scale : u === 'T' ? undefined : book.pages || undefined}
+                    placeholder={u === 'T' ? 'h:mm' : undefined}
+                    value={draftPage}
+                    onFocus={(e) => e.target.select()}
+                    onChange={(e) => setDraftPage(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { savePage(); e.target.blur() } }}
+                    aria-label={conv ? (u === 'S' ? 'Seite im eReader' : u === 'T' ? 'Gehörte Zeit' : 'Fortschritt in Prozent') : 'Aktuelle Seite'}
+                  />
+                  {audio && (
+                    aTotal ? (
+                      <button className="pg-unit" aria-label="Einheit wechseln"
+                        onClick={() => {
+                          const next = aunit === 'T' ? '%' : 'T'
+                          setAunit(next)
+                          try { localStorage.setItem('libri:audioUnit', next) } catch { /* egal */ }
+                        }}>{aunit === 'T' ? 'h' : '%'}</button>
+                    ) : <span className="pg-unit">%</span>
+                  )}
+                  {ebook && (
+                    <button className="pg-unit" aria-label="Einheit wechseln"
+                      onClick={() => {
+                        const next = unit === 'S' ? '%' : 'S'
+                        setUnit(next)
+                        try { localStorage.setItem('libri:ebookUnit', next) } catch { /* egal */ }
+                      }}>{unit === 'S' ? 'S.' : '%'}</button>
+                  )}
+                </div>
+                <button className="btn btn-primary" onClick={savePage} disabled={!dirty}>
+                  {dirty && unitDelta > 0 ? `Speichern · +${u === 'T' ? fmtHM(unitDelta) : unitDelta}${u === 'T' ? '' : (audio || (u === '%' && ebook)) ? ' %' : ''}` : 'Speichern'}
+                </button>
+              </div>
+            )}
           </div>
 
-          <button className="btn btn-block" style={{ marginTop: 10 }} onClick={finishBook} disabled={finishing}>
-            {finishing ? <span className="spinner" /> : 'Fertig gelesen'}
+          <button className="btn btn-block" style={{ marginTop: 10 }} onClick={() => (local.format ? finishBook(local.format) : setPickFormat(true))} disabled={finishing}>
+            {finishing ? <span className="spinner" /> : (audio || local.format === 'audio' ? 'Fertig gehört' : 'Fertig gelesen')}
           </button>
           {local.status !== 'reading' && (
             <button className="btn btn-quiet" style={{ marginTop: 6, padding: '6px 4px' }}
@@ -332,14 +515,34 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
             </button>
           )}
 
-          <button className="btn" style={{ marginTop: 8 }} onClick={() => apply(
+          <button className="btn" style={{ marginTop: 8 }} onClick={() => setRereading(true)}>
+            Nochmal lesen oder hören
+          </button>
+
+          <button className="btn btn-quiet" style={{ marginTop: 8 }} onClick={() => apply(
             { status: 'owned', finishedAt: null },
             'Zurück ins Regal'
           )}>Doch nicht fertig</button>
         </>
       )}
 
-      <ReadingHistory book={book} />
+      {local.reads?.length > 0 && (
+        <>
+          <h2>Frühere Durchgänge</h2>
+          <div className="facts-list">
+            {local.reads.map((r, i) => (
+              <div className="fact-row" key={i}>
+                <span>{r.finishedAt
+                  ? new Date(r.finishedAt).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' })
+                  : 'Früher'}</span>
+                <b>{FORMATS[r.format || 'print']}{r.language ? ` · ${languageName(r.language)}` : ''}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {local.format !== 'audio' && <ReadingHistory book={book} />}
 
       <SessionLog book={book} notify={notify} />
 

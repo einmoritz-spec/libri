@@ -1,6 +1,6 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useEffect, useMemo, useState } from 'react'
-import { db, hasRealTime, pagesReadTotal, pagesByMonth, isUndated } from '../lib/db'
+import { db, expandReads, hasRealTime, pagesReadTotal, pagesByMonth, isUndated } from '../lib/db'
 import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import NotesSearch from './NotesSearch'
@@ -89,7 +89,13 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
     db.books.toArray().then((r) => alive && setDirect(r)).catch(() => alive && setDirect([]))
     return () => { alive = false }
   }, [])
-  const books = live !== undefined ? live : direct
+  const rawBooks = live !== undefined ? live : direct
+  // Erneut Gelesenes mitzählen? Aus: nur der erste Durchgang jedes Buchs zählt.
+  const [rereads, setRereads] = useState(() => {
+    try { return localStorage.getItem('libri:rereads') !== '0' } catch { return true }
+  })
+  const hasRereads = !!rawBooks && rawBooks.some((b) => b.reads?.length)
+  const books = useMemo(() => rawBooks && expandReads(rawBooks, { rereads }), [rawBooks, rereads])
 
   // Lesesitzungen — für Tageszeit, Wochentag und Lesesträhne. Getrennt von
   // den Büchern geladen, da unabhängig verfügbar sein soll.
@@ -100,7 +106,9 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
     db.sessions.toArray().then((r) => alive && setSessDirect(r)).catch(() => alive && setSessDirect([]))
     return () => { alive = false }
   }, [])
-  const sessions = sessLive !== undefined ? sessLive : sessDirect
+  // Hörbuch-Sitzungen zählen nicht in die Seiten-Auswertungen
+  const rawSessions = sessLive !== undefined ? sessLive : sessDirect
+  const sessions = useMemo(() => rawSessions && rawSessions.filter((s) => s.format !== 'audio'), [rawSessions])
 
   const [year, setYear] = useState(new Date().getFullYear())
 
@@ -109,7 +117,7 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
 
     const read = books.filter((b) => b.status === 'read')
     const reading = books.filter((b) => b.status === 'reading')
-    const owned = books.filter((b) => b.status !== 'wishlist')
+    const owned = rawBooks.filter((b) => b.status !== 'wishlist')
     const unread = owned.filter((b) => b.status === 'owned')
 
     // Nur bestätigte Daten zählen — ein automatisch beim Abhaken gesetztes
@@ -145,7 +153,7 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
       ? Math.round(durations.reduce((s, d) => s + d.days, 0) / durations.length)
       : null
 
-    const withPages = read.filter((b) => b.pages)
+    const withPages = read.filter((b) => b.pages && b.format !== 'audio')
     const longest = withPages.length
       ? withPages.reduce((a, b) => (b.pages > a.pages ? b : a))
       : null
@@ -180,7 +188,7 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
       undated: books.filter(isUndated).length,
       fastest: durations.length ? durations.reduce((a, b) => (b.days < a.days ? b : a)) : null
     }
-  }, [books, sessions, year])
+  }, [books, rawBooks, sessions, year])
 
   const timeData = useMemo(() => {
     if (!sessions || !sessions.length) return null
@@ -289,6 +297,16 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
         </div>
       </div>
 
+      {hasRereads && (
+        <button className="rereads-toggle" onClick={() => {
+          const next = !rereads
+          setRereads(next)
+          try { localStorage.setItem('libri:rereads', next ? '1' : '0') } catch { /* egal */ }
+        }}>
+          Erneut Gelesenes: {rereads ? 'mitgezählt' : 'ausgeblendet'} · ändern
+        </button>
+      )}
+
       {(d.years.length > 0 || d.pagesPerMonth.some((v) => v > 0)) && (
         <>
           <div className="stats-year-head">
@@ -307,7 +325,7 @@ export default function Stats({ onOpenBook, notify = () => {} }) {
           )}
 
           {reviewOpen && (
-            <YearReview books={books} year={year} onClose={() => setReviewOpen(false)} onOpenBook={onOpenBook} />
+            <YearReview books={books} year={year} onClose={() => setReviewOpen(false)} onOpenBook={onOpenBook} notify={notify} />
           )}
 
           <div className="stat-row" style={{ marginBottom: 14 }}>

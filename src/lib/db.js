@@ -144,6 +144,11 @@ export function emptyBook(overrides = {}) {
     coverBlob: null,
     spineColor: null,
     status: 'owned',
+    audioMinutes: null, // Hörbuch-Laufzeit in Minuten (aus dem Katalog)
+    reads: [], // frühere Durchgänge: { startedAt, finishedAt, rating, format, language }
+    readLanguage: null, // Sprache des aktuellen Durchgangs, falls anders als die des Buchs
+    format: null, // 'print' | 'ebook' | 'audio' — wie gelesen
+    ebookPages: null, // Seitenzahl, die der eReader anzeigt
     currentPage: 0,
     rating: null,
     notes: '',
@@ -283,6 +288,10 @@ export async function bulkTags(ids, tag, remove = false) {
   })
 }
 
+export async function bulkSetFormat(ids, format) {
+  await updateBooks(ids, { format })
+}
+
 export async function bulkSetLanguage(ids, language) {
   await updateBooks(ids, { language })
 }
@@ -363,13 +372,49 @@ export async function setProgress(book, page) {
 
   return db.transaction('rw', db.books, db.sessions, async () => {
     if (delta > 0) {
-      await db.sessions.add({ bookId: book.id, date: today.slice(0, 10), at: today, pages: delta })
+      await db.sessions.add({ bookId: book.id, date: today.slice(0, 10), at: today, pages: delta, ...(book.format ? { format: book.format } : {}) })
     }
     await db.books.update(book.id, changes)
   })
 }
 
-export async function markFinished(book) {
+/** Jeden früheren Durchgang (erneutes Lesen/Hören) als eigenes „gelesenes“
+    Buch für die Statistik ausrollen. So zählen Bücher, Seiten (je nach
+    Format) und Sprachen für jeden Durchgang mit eigenem Datum, ohne dass die
+    Bibliothek doppelte Einträge bekommt. Die Einträge teilen sich die id des
+    Buchs; `_k` ist ein eindeutiger Listenschlüssel. */
+export function expandReads(books, { rereads = true } = {}) {
+  const out = []
+  const virtual = (b, r, i) => ({
+    ...b,
+    _k: `${b.id}-r${i}`,
+    status: 'read',
+    startedAt: r.startedAt || null,
+    finishedAt: r.finishedAt || null,
+    rating: r.rating || null,
+    format: r.format || null,
+    language: r.language || b.language,
+    readLanguage: null,
+    currentPage: b.pages || 0,
+    datesConfirmed: r.datesConfirmed !== false,
+    readBefore: !!r.readBefore
+  })
+  for (const b of books) {
+    const reads = b.reads || []
+    if (!reads.length) { out.push(b); continue }
+    if (rereads) {
+      out.push(b.readLanguage && b.status === 'read' ? { ...b, language: b.readLanguage } : b)
+      reads.forEach((r, i) => out.push(virtual(b, r, i)))
+    } else {
+      // Nur der erste Durchgang zählt; ein laufender oder späterer Durchgang nicht als eigenes Buch.
+      if (b.status !== 'read') out.push(b)
+      out.push(virtual(b, reads[0], 0))
+    }
+  }
+  return out
+}
+
+export async function markFinished(book, format = null) {
   // Wurde zwischendurch mindestens einmal Fortschritt getrackt, ist das
   // Datum vertrauenswürdig und zählt automatisch in der Statistik. Ganz ohne
   // jede Sitzung direkt auf "Fertig gelesen" zu drücken, ist dagegen genau
@@ -381,7 +426,8 @@ export async function markFinished(book) {
     currentPage: book.pages || book.currentPage,
     finishedAt: new Date().toISOString(),
     startedAt: book.startedAt || new Date().toISOString(),
-    datesConfirmed: hasSessions
+    datesConfirmed: hasSessions,
+    ...(format ? { format } : {})
   })
 }
 
@@ -438,11 +484,11 @@ export async function exportLibrary() {
    eine ältere Sicherung Lesestand und Bewertung zurücksetzen. */
 const IMPORT_OVERWRITE = [
   'title', 'subtitle', 'authors', 'publisher', 'year', 'pages', 'language',
-  'description', 'series', 'subseries', 'subseriesIndex', 'seriesIndex', 'coverUrl', 'source'
+  'description', 'audioMinutes', 'series', 'subseries', 'subseriesIndex', 'seriesIndex', 'coverUrl', 'source'
 ]
 const IMPORT_FILL_ONLY = [
   'status', 'currentPage', 'rating', 'notes', 'tags', 'startedAt', 'finishedAt',
-  'addedAt', 'datesConfirmed', 'readBefore', 'shelfRow', 'shelfIndex', 'spineColor'
+  'format', 'ebookPages', 'reads', 'readLanguage', 'addedAt', 'datesConfirmed', 'readBefore', 'shelfRow', 'shelfIndex', 'spineColor'
 ]
 
 function hasValue(v) {
@@ -611,7 +657,7 @@ function isIncomplete(b) {
     Ergänzung sie beim nächsten Mal wieder anfragt. */
 export async function resetEnrichTried() {
   const n = await db.books.filter((b) => b.enrichTried !== undefined).count()
-  await db.books.toCollection().modify((b) => { delete b.enrichTried; delete b.descriptionTried })
+  await db.books.toCollection().modify((b) => { delete b.enrichTried; delete b.descriptionTried; delete b.audioTried })
   return n
 }
 
@@ -831,6 +877,7 @@ export async function setFinishedOn(id, dateStr) {
 export function pagesReadTotal(books) {
   let total = 0
   for (const b of books) {
+    if (b.format === 'audio') continue // Hörbücher zählen nicht als gelesene Seiten
     if (b.status === 'read') total += b.pages || 0
     else if (b.status === 'reading' || b.status === 'dnf') total += b.currentPage || 0
   }
@@ -847,12 +894,12 @@ export function pagesByMonth(books, sessions, year) {
   const logged = new Map()
   for (const s of sessions) {
     const book = byId.get(s.bookId)
-    if (!book || !s.date) continue
+    if (!book || !s.date || s.format === 'audio') continue
     logged.set(s.bookId, (logged.get(s.bookId) || 0) + (s.pages || 0))
     if (Number(s.date.slice(0, 4)) === year) months[Number(s.date.slice(5, 7)) - 1] += s.pages || 0
   }
   for (const b of books) {
-    if (b.status !== 'read' || !b.pages || !b.finishedAt || !b.datesConfirmed) continue
+    if (b.status !== 'read' || b.format === 'audio' || !b.pages || !b.finishedAt || !b.datesConfirmed) continue
     if (Number(b.finishedAt.slice(0, 4)) !== year) continue
     const rest = Math.max(0, b.pages - (logged.get(b.id) || 0))
     months[Number(b.finishedAt.slice(5, 7)) - 1] += rest
@@ -877,7 +924,7 @@ const dayKey = (d) => d.toISOString().slice(0, 10)
     Weicht das Tempo der letzten sieben Tage stark vom Monatsschnitt ab
     (um mehr als ein Drittel), zählt das jüngste Tempo stärker. */
 export async function readingPace(now = new Date()) {
-  const rows = await db.sessions.toArray()
+  const rows = (await db.sessions.toArray()).filter((r) => r.format !== 'audio')
   const dated = rows.filter((r) => r.date)
   if (!dated.length) return null
 
@@ -970,7 +1017,7 @@ export function estimateFinish(book, pace, now = new Date()) {
  * Datenbank.
  */
 export async function readingHistory(book, days = 30) {
-  const rows = await db.sessions.where('bookId').equals(book.id).toArray()
+  const rows = (await db.sessions.where('bookId').equals(book.id).toArray()).filter((r) => r.format !== 'audio')
   if (!rows.length) return null
 
   const perDay = new Map()

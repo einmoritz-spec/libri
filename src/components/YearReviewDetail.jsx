@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Cover } from './ui'
+import { Cover, AudioMark } from './ui'
 import {
   MONTHS, formatPct, pageSegments, authorSegments, donutArcs, ratingDistribution, booksByMonth, authorsRanking
 } from '../lib/reviewData'
@@ -33,7 +33,7 @@ function BookRow({ book, onOpen, sub, children }) {
     <button className="book-row" onClick={() => onOpen({ id: book.id })}>
       <div className="book-row-art"><Cover book={book} /></div>
       <div className="book-row-text">
-        <div className="book-row-title">{book.title}</div>
+        <div className="book-row-title">{book.title}<AudioMark book={book} /></div>
         <div className="book-row-author">{sub ?? (book.authors?.[0] || '—')}</div>
       </div>
       {children && <div className="book-row-side">{children}</div>}
@@ -48,9 +48,9 @@ function BooksView({ books, onOpen }) {
   return (
     <div className="book-list">
       {list.map((b) => (
-        <BookRow key={b.id} book={b} onOpen={onOpen}>
+        <BookRow key={b._k ?? b.id} book={b} onOpen={onOpen}>
           <b>{shortDate(b.finishedAt)}</b>
-          {b.pages ? <div>{fmt(b.pages)} S.</div> : null}
+          {b.pages && b.format !== 'audio' ? <div>{fmt(b.pages)} S.</div> : null}
         </BookRow>
       ))}
     </div>
@@ -137,7 +137,7 @@ function PagesView({ books, onOpen }) {
           </button>
         )) : rows.map((r) => (
           <button
-            key={r.book.id}
+            key={r.book._k ?? r.book.id}
             className={`legend-row${selected === r.segKey ? ' is-selected' : ''}`}
             onClick={() => onOpen({ id: r.book.id })}
           >
@@ -186,7 +186,7 @@ function RatingView({ books, onOpen }) {
       <h2 style={{ marginTop: 26 }}>Alle Bewertungen</h2>
       <div className="book-list">
         {rated.map((b) => (
-          <BookRow key={b.id} book={b} onOpen={onOpen} sub={<Stars value={b.rating} />}>
+          <BookRow key={b._k ?? b.id} book={b} onOpen={onOpen} sub={<Stars value={b.rating} />}>
             <b>{b.rating}/10</b>
           </BookRow>
         ))}
@@ -196,7 +196,7 @@ function RatingView({ books, onOpen }) {
         <>
           <h2 style={{ marginTop: 26 }}>Noch nicht bewertet</h2>
           <div className="book-list">
-            {unrated.map((b) => <BookRow key={b.id} book={b} onOpen={onOpen} />)}
+            {unrated.map((b) => <BookRow key={b._k ?? b.id} book={b} onOpen={onOpen} />)}
           </div>
         </>
       )}
@@ -207,7 +207,7 @@ function RatingView({ books, onOpen }) {
 /* ---------- Umfang ---------- */
 
 function ThickView({ books, onOpen }) {
-  const list = books.filter((b) => b.pages > 0).sort((a, b) => b.pages - a.pages)
+  const list = books.filter((b) => b.pages > 0 && b.format !== 'audio').sort((a, b) => b.pages - a.pages)
   if (!list.length) {
     return <p className="hint" style={{ textAlign: 'left' }}>Für diese Bücher ist keine Seitenzahl hinterlegt.</p>
   }
@@ -221,7 +221,7 @@ function ThickView({ books, onOpen }) {
         <div className="fact-row"><span>Kürzestes Buch</span><b>{shortest.title} · {fmt(shortest.pages)} S.</b></div>
       </div>
       {list.map((b) => (
-        <button key={b.id} className="rank-row" onClick={() => onOpen({ id: b.id })}>
+        <button key={b._k ?? b.id} className="rank-row" onClick={() => onOpen({ id: b.id })}>
           <div className="rank-top">
             <span>{b.title}</span>
             <b>{fmt(b.pages)}</b>
@@ -251,9 +251,9 @@ function AuthorsView({ books, onOpen }) {
           </div>
           <div className="rank-bar"><i style={{ width: `${(a.books.length / max) * 100}%` }} /></div>
           {a.books.map((b) => (
-            <button key={b.id} className="author-book" onClick={() => onOpen({ id: b.id })}>
-              <span>{b.title}</span>
-              {b.pages ? <span>{fmt(b.pages)}</span> : null}
+            <button key={b._k ?? b.id} className="author-book" onClick={() => onOpen({ id: b.id })}>
+              <span>{b.title}<AudioMark book={b} /></span>
+              {b.pages && b.format !== 'audio' ? <span>{fmt(b.pages)}</span> : null}
             </button>
           ))}
         </div>
@@ -294,7 +294,7 @@ function MonthsView({ books, onOpen }) {
             </div>
             <div className="book-list">
               {list.map((b) => (
-                <BookRow key={b.id} book={b} onOpen={onOpen}><b>{shortDate(b.finishedAt)}</b></BookRow>
+                <BookRow key={b._k ?? b.id} book={b} onOpen={onOpen}><b>{shortDate(b.finishedAt)}</b></BookRow>
               ))}
             </div>
           </section>

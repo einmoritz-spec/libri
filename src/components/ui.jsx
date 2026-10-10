@@ -12,6 +12,12 @@ export function EmptyBookIcon() {
   )
 }
 
+/** Kleines Kopfhörer-Symbol hinter Titeln von Hörbüchern. */
+export function AudioMark({ book }) {
+  if (book?.format !== 'audio') return null
+  return <span className="fmt-icon" title="Hörbuch" aria-label="Hörbuch"><Icon name="headphones" /></span>
+}
+
 export function Icon({ name }) {
   const common = {
     viewBox: '0 0 24 24',
@@ -35,7 +41,9 @@ export function Icon({ name }) {
   const paths = {
     scan: 'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 8v8M11 8v8M15 8v8',
     shelf: 'M4 4v16M9 4v16M14 5l4 15M3 20h18',
-    stats: 'M4 20V10M10 20V4M16 20v-7M22 20H2'
+    stats: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+    share: 'M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v13',
+    headphones: 'M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z'
   }
   return (
     <svg {...common}>

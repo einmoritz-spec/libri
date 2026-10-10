@@ -2522,3 +2522,36 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 }
 .guide-link svg { width: 15px; height: 15px; }
 .guide-link i { font-style: normal; font-size: 16px; line-height: 1; }
+
+/* eReader-Eingabe: Einheit klein im Feld, Moduswechsel als leiser Textlink */
+.pg-field { position: relative; flex: 1; display: flex; }
+.pg-field .pg-input { width: 100%; padding-right: 44px; }
+.pg-unit {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  min-width: 34px; padding: 4px 8px; border-radius: 8px;
+  background: var(--line); border: 0; color: var(--dim); font-size: 13px; font-weight: 600;
+}
+.pg-mode {
+  display: block; margin: 10px auto 0; background: none; border: 0;
+  color: var(--dim); font-size: 13px; padding: 4px 8px;
+}
+
+.fmt-chip {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+  text-decoration: underline dotted var(--dim); text-underline-offset: 3px;
+}
+
+.fmt-icon { display: inline-block; width: 13px; height: 13px; margin-left: 6px; vertical-align: -1px; color: var(--dim); }
+.fmt-icon svg { width: 100%; height: 100%; display: block; }
+
+/* Leiser Icon-Knopf (z. B. Teilen im Jahresrückblick) */
+.icon-quiet {
+  background: none; border: 0; padding: 8px; color: var(--dim);
+  display: inline-flex; border-radius: 10px;
+}
+.icon-quiet svg { width: 20px; height: 20px; }
+.icon-quiet:disabled { opacity: 0.4; }
+.rereads-toggle {
+  display: block; margin: -4px 0 14px; background: none; border: 0; padding: 2px 0;
+  color: var(--dim); font-size: 13px; text-align: left;
+}

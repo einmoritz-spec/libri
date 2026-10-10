@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useBackLayer } from '../lib/backStack'
 import {
   STATUS, bulkSetStatus, bulkSetAuthors, bulkSetSeries, bulkSetSubseries, bulkTags,
-  bulkSetLanguage, deleteBooks, backfillCovers
+  bulkSetLanguage, bulkSetFormat, deleteBooks, backfillCovers
 } from '../lib/db'
 
 /* Leiste oben, solange Bücher ausgewählt sind, und das Aktionsmenü dazu.
@@ -77,6 +77,7 @@ export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone
         <Row label="Schlagwort …" onClick={() => go('tag')} />
         <Row label="Als Bilderbuch markieren" onClick={() => run(() => bulkTags(ids, 'Bilderbuch'), `${n} ${word} als Bilderbuch markiert`)} />
         <Row label="Sprache setzen …" onClick={() => go('lang')} />
+        <Row label="Format setzen …" sub="Buch, eBook oder Hörbuch" onClick={() => go('format')} />
         <Row label="Fehlende Angaben ergänzen" sub="Cover, Seiten, Verlag, Beschreibung"
           onClick={async () => {
             setBusy(true)
@@ -169,6 +170,10 @@ export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone
     body = LANGS.map(([code, label]) => (
       <Row key={code} label={label} onClick={() => run(() => bulkSetLanguage(ids, code), `Sprache: ${label}`)} />
     ))
+  } else if (step === 'format') {
+    body = [['print', 'Buch'], ['ebook', 'eBook'], ['audio', 'Hörbuch']].map(([code, label]) => (
+      <Row key={code} label={label} onClick={() => run(() => bulkSetFormat(ids, code), `${n} ${word}: ${label}`)} />
+    ))
   } else if (step === 'delete') {
     body = (
       <>
@@ -187,7 +192,7 @@ export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone
 
   const titles = {
     menu: `${n} ${word}`, status: 'Status ändern', author: 'Autor eintragen', series: 'Reihe eintragen', subseries: 'Unterreihe eintragen',
-    tag: 'Schlagwort', lang: 'Sprache setzen', delete: 'Löschen'
+    tag: 'Schlagwort', lang: 'Sprache setzen', format: 'Format setzen', delete: 'Löschen'
   }
 
   return (

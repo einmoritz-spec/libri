@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { loadRuntimes } from '../lib/audio'
 import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
@@ -75,6 +76,21 @@ export default function Settings({ notify }) {
   const [diagBusy, setDiagBusy] = useState(false)
   const [diagIsbn, setDiagIsbn] = useState('')
   const [cover, setCover] = useState(null)
+  const [audioRun, setAudioRun] = useState(null)
+
+  async function runAudio() {
+    stopRef.current = false
+    setAudioRun({ running: true, done: 0, total: 0, filled: 0 })
+    try {
+      const r = await loadRuntimes({
+        onProgress: (p) => setAudioRun({ running: true, ...p }),
+        shouldStop: () => stopRef.current
+      })
+      setAudioRun({ running: false, ...r })
+    } catch {
+      setAudioRun({ running: false, failed: true })
+    }
+  }
   const stopRef = useRef(false)
 
   async function runBackfill() {
@@ -236,6 +252,23 @@ export default function Settings({ notify }) {
               </p>
             )}
             <button className="btn" onClick={retryAll}>Erfolglose erneut versuchen</button>
+            {audioRun?.running ? (
+              <div className="setting-progress">
+                <span><span className="spinner" /> Hörbuch-Zeiten {audioRun.done} von {audioRun.total} · {audioRun.filled} gefunden</span>
+                <button className="btn btn-quiet" onClick={() => { stopRef.current = true }}>Abbrechen</button>
+              </div>
+            ) : (
+              <button className="btn" onClick={runAudio}>Hörbuch-Laufzeiten laden</button>
+            )}
+            {audioRun && !audioRun.running && (
+              <p className="setting-result">
+                {audioRun.failed
+                  ? 'Das hat nicht geklappt.'
+                  : audioRun.blocked
+                    ? 'Audible lässt den Abruf aus der App nicht zu. Es werden weiter geschätzte Zeiten („ca.“) angezeigt.'
+                    : `${audioRun.filled} gefunden · ${audioRun.missing} ohne Treffer (dort bleibt es geschätzt)`}
+              </p>
+            )}
             <button className="btn" onClick={trimCovers} disabled={Boolean(trimming)}>
               {trimming ? `Cover prüfen … ${trimming.done} von ${trimming.total}` : 'Schwarze Cover-Ränder entfernen'}
             </button>

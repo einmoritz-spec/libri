@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, pagesByMonth } from '../lib/db'
-import { Cover } from './ui'
+import { Cover, Icon } from './ui'
+import { makeYearImage, shareImage } from '../lib/shareImage'
 import YearReviewDetail from './YearReviewDetail'
 import { useBackLayer } from '../lib/backStack'
 import { MONTHS } from '../lib/reviewData'
 
-export default function YearReview({ books, year, onClose, onOpenBook }) {
+export default function YearReview({ books, year, onClose, onOpenBook, notify }) {
+  const [sharing, setSharing] = useState(false)
   const [quotes, setQuotes] = useState([])
   const [detail, setDetail] = useState(null)
   const sessions = useLiveQuery(() => db.sessions.toArray(), [], [])
@@ -48,7 +50,7 @@ export default function YearReview({ books, year, onClose, onOpenBook }) {
 
     // Gelesene Seiten des Jahres — auch aus Büchern, die noch nicht fertig sind.
     const pages = pagesByMonth(books, sessions || [], year).reduce((a, b) => a + b, 0)
-    const withPages = inYear.filter((b) => b.pages)
+    const withPages = inYear.filter((b) => b.pages && b.format !== 'audio')
     const thickest = withPages.length
       ? withPages.reduce((a, b) => (b.pages > a.pages ? b : a))
       : null
@@ -79,6 +81,23 @@ export default function YearReview({ books, year, onClose, onOpenBook }) {
       <div className="sheet">
         <div className="sheet-bar">
           <button className="btn btn-quiet" onClick={onClose}>Zurück</button>
+          {stats && (
+            <button className="icon-quiet" aria-label="Als Bild teilen" disabled={sharing}
+              onClick={async () => {
+                setSharing(true)
+                try {
+                  const blob = await makeYearImage(year, stats)
+                  const r = await shareImage(blob, `lesejahr-${year}.png`)
+                  if (r === 'saved') notify?.('Bild gespeichert')
+                } catch {
+                  notify?.('Das Bild ließ sich nicht erstellen.')
+                } finally {
+                  setSharing(false)
+                }
+              }}>
+              <Icon name="share" />
+            </button>
+          )}
         </div>
 
         {!stats ? (
