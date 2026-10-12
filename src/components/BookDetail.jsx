@@ -404,7 +404,7 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
             )}
             {!needTotal && (
               <div className="pg-entry">
-                <div className="pg-field">
+                <div className={`pg-field${conv ? ' has-unit' : ''}`}>
                   <input
                     className="pg-input"
                     type={u === 'T' ? 'text' : 'number'} inputMode={u === 'T' ? 'decimal' : 'numeric'} min="0"

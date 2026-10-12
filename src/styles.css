@@ -2525,7 +2525,9 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 
 /* eReader-Eingabe: Einheit klein im Feld, Moduswechsel als leiser Textlink */
 .pg-field { position: relative; flex: 1; display: flex; }
-.pg-field .pg-input { width: 100%; padding-right: 44px; }
+.pg-field .pg-input { width: 100%; }
+/* Mit Einheit im Feld links und rechts gleich viel Platz, damit die Zahl mittig bleibt */
+.pg-field.has-unit .pg-input { padding-left: 48px; padding-right: 48px; }
 .pg-unit {
   position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
   min-width: 34px; padding: 4px 8px; border-radius: 8px;
