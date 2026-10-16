@@ -7,6 +7,7 @@ import Scan from './components/Scan'
 // Start heruntergeladen und ausgeführt werden muss.
 const Stats = lazy(() => import('./components/Stats'))
 const Settings = lazy(() => import('./components/Settings'))
+const ShopView = lazy(() => import('./components/ShopView'))
 const QuickEdit = lazy(() => import('./components/QuickEdit'))
 import BookDetail from './components/BookDetail'
 import AuthorView from './components/AuthorView'
@@ -33,6 +34,7 @@ export default function App() {
   const [authorName, setAuthorName] = useState(null)
   const [quickId, setQuickId] = useState(null)
   const [toast, setToast] = useState(null)
+  const [shopOpen, setShopOpen] = useState(false)
 
   const openBook = useLiveQuery(
     () => (openId ? db.books.get(openId) : undefined),
@@ -119,6 +121,7 @@ export default function App() {
     localStorage.setItem('libri:libview', 'home')
     setTab('library')
   })
+  useBackLayer(shopOpen, () => setShopOpen(false))
   useBackLayer(Boolean(quickId), () => setQuickId(null))
   useBackLayer(Boolean(authorName), () => setAuthorName(null))
   useBackLayer(Boolean(draft), () => setDraft(null))
@@ -177,7 +180,8 @@ export default function App() {
         <div className="screen"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
       }>
         {tab === 'stats' && <Stats onOpenBook={openBookById} notify={notify} />}
-        {tab === 'settings' && <Settings notify={notify} />}
+        {tab === 'settings' && <Settings notify={notify} onOpenShop={() => setShopOpen(true)} />}
+        {shopOpen && <ShopView onClose={() => setShopOpen(false)} />}
       </Suspense>
 
       {quickBook && (

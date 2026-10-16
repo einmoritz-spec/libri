@@ -1,5 +1,6 @@
 import Dexie from 'dexie'
 import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars } from './metadata.js'
+import { loadShop, matchBook } from './shopData.js'
 
 export const STATUS = {
   wishlist: 'Wunschliste',
@@ -668,6 +669,39 @@ export async function resetEnrichTried() {
 export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}) {
   // Mit `ids` (Auswahl): nur diese Bücher, und auch solche, bei denen es früher
   // schon erfolglos war — wer gezielt auswählt, will es ausdrücklich noch einmal.
+  // Zuerst aus dem Shop: Cover, Text, Seiten, Verlag, Jahr — auch ohne ISBN.
+  let shopFilled = 0
+  try {
+    const shop = await loadShop()
+    const pool = (await db.books.toArray()).filter((b) => (!ids || ids.includes(b.id)) && b.status !== 'wishlist')
+    for (let i = 0; i < pool.length; i++) {
+      if (shouldStop?.()) break
+      const b = pool[i]
+      if (!isIncomplete(b)) continue
+      const p = matchBook(shop, b)
+      if (!p) continue
+      const ch = {}
+      if (!b.hasCover && p.img) {
+        const blob = await dataUrlToBlob(p.img)
+        if (blob) {
+          ch.coverBlob = blob
+          const sc = await dominantColor(blob)
+          if (sc) ch.spineColor = sc
+        }
+      }
+      if (!b.description && p.ds) ch.description = p.ds
+      if (!b.pages && p.pg) ch.pages = p.pg
+      if (!b.publisher && p.pub) ch.publisher = p.pub
+      if (!b.year && p.y) ch.year = p.y
+      if (!b.language && p.l) ch.language = p.l
+      if (Object.keys(ch).length) { await updateBook(b.id, ch); shopFilled++ }
+      if (i % 20 === 19) {
+        onProgress?.({ done: 0, total: pool.length, title: 'Shop', filled: shopFilled })
+        await new Promise((r) => setTimeout(r, 0))
+      }
+    }
+  } catch { /* ohne Shop-Daten geht es mit den Online-Katalogen weiter */ }
+
   const all = (await db.books.toArray()).filter((b) => !ids || ids.includes(b.id))
   // Alles, wo etwas Wesentliches fehlt — nicht nur Bücher ohne Cover.
   const incomplete = all.filter((b) => b.isbn13 && isIncomplete(b))
@@ -678,7 +712,7 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
   const missing = incomplete.filter((b) => ids || b.enrichTried !== b.isbn13)
   const skipped = incomplete.length - missing.length
 
-  let filled = 0
+  let filled = shopFilled
   let failed = 0
 
   for (let i = 0; i < missing.length; i++) {
@@ -739,7 +773,7 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
   }
 
   onProgress?.({ done: missing.length, total: missing.length, filled })
-  return { filled, failed, skipped, total: missing.length }
+  return { filled, failed, skipped, total: missing.length + shopFilled }
 }
 
 /* ---------- Notizen und Zitate ---------- */

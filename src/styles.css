@@ -2557,3 +2557,17 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
   display: block; margin: -4px 0 14px; background: none; border: 0; padding: 2px 0;
   color: var(--dim); font-size: 13px; text-align: left;
 }
+
+/* Shop als Vollbild-Ebene */
+.settings-shop { width: 100%; margin-bottom: 14px; }
+.shop-layer {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--night);
+}
+.shop-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(env(safe-area-inset-top) + 6px) var(--pad) 6px;
+  border-bottom: 1px solid var(--line);
+}
+.shop-frame { flex: 1; width: 100%; border: 0; background: #fff; }

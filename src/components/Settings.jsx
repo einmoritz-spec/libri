@@ -40,7 +40,7 @@ function OnOff({ on, set }) {
   )
 }
 
-export default function Settings({ notify }) {
+export default function Settings({ notify, onOpenShop }) {
   const fileRef = useRef(null)
   const [replace, setReplace] = useState(false)
   const [theme, setThemeState] = useState(
@@ -194,6 +194,8 @@ export default function Settings({ notify }) {
       {days !== null && days >= 14 && (
         <p className="settings-flag">Letzte Sicherung vor {days} Tagen</p>
       )}
+
+      <button className="btn btn-primary settings-shop" onClick={onOpenShop}>Shop öffnen</button>
 
       <Section title="Darstellung">
         <Row label="Design">
