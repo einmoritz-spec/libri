@@ -45,7 +45,7 @@ export default defineConfig({
         // native Barcode-Erkennung gebraucht — also nicht auf Android. Deshalb
         // nicht vorab mitladen, sondern erst bei Bedarf holen und dann behalten.
         globIgnores: ['**/zxing*.js'],
-        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
         // API-Antworten und Cover offline vorhalten
         runtimeCaching: [
           {
