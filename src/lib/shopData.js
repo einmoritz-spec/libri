@@ -48,3 +48,6 @@ export function matchBook(shop, book) {
   const score = (p) => (LANG[lang] && p.l === lang ? 4 : 0) + (p.img ? 2 : 0) + (p.ds ? 1 : 0)
   return ok.slice().sort((a, b) => score(b) - score(a))[0]
 }
+
+/** Schlüssel eines Shop-Buchs — derselbe wie im Shop (k2). */
+export const shopKey = (p) => [p.g, p.l, p.n, p.t, p.a].join('|')

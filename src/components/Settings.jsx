@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { loadRuntimes } from '../lib/audio'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
+import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -106,6 +106,7 @@ export default function Settings({ notify, onOpenShop }) {
 
   async function retryAll() {
     const n = await resetEnrichTried()
+    await resetShopTried()
     setCover(null)
     notify(n ? `${n} Bücher werden beim nächsten Durchlauf wieder versucht` : 'Nichts zurückzusetzen')
   }

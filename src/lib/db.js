@@ -1,6 +1,6 @@
 import Dexie from 'dexie'
-import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars } from './metadata.js'
-import { loadShop, matchBook } from './shopData.js'
+import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars, searchBooksByText } from './metadata.js'
+import { loadShop, matchBook, shopKey } from './shopData.js'
 
 export const STATUS = {
   wishlist: 'Wunschliste',
@@ -95,6 +95,17 @@ db.version(4)
       }
     }
   })
+
+/* Version 5: Ergänzungen zu den Shop-Büchern (ISBN, Cover, Text …).
+   Der Katalog selbst liegt fest in der App; hier steht nur, was Libri
+   zusätzlich herausgefunden hat — pro Shop-Buch ein Eintrag. */
+db.version(5).stores({
+  books: '++id, isbn13, title, status, addedAt, finishedAt, language, rating, year',
+  sessions: '++id, bookId, date',
+  covers: 'bookId',
+  notes: '++id, bookId, createdAt',
+  shopMeta: 'key'
+})
 
 /* Öffnungszustand der Datenbank.
    Ohne das hier wartet eine Abfrage im Fehlerfall endlos — und der Bildschirm
@@ -473,8 +484,44 @@ export async function exportLibrary() {
     exportedAt: new Date().toISOString(),
     books: serialised,
     sessions,
-    notes: await db.notes.toArray()
+    notes: await db.notes.toArray(),
+    shop: await exportShop()
   }
+}
+
+/** Shop-Daten für die Sicherung: ergänzte Angaben samt Cover, Warenkorb und
+    bisherige Bestellungen (liegen im Speicher des Browsers). */
+async function exportShop() {
+  const meta = []
+  for (const m of await db.shopMeta.toArray()) {
+    const { coverBlob, ...rest } = m
+    meta.push({ ...rest, coverData: coverBlob ? await blobToDataUrl(coverBlob) : null })
+  }
+  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } }
+  return { meta, cart: read('cart2'), orders: read('orders2') }
+}
+
+/** Gegenstück: Shop-Daten aus einer Sicherung zurückholen, ohne Vorhandenes zu verlieren. */
+async function importShop(shop) {
+  if (!shop) return
+  for (const r of shop.meta || []) {
+    const { coverData, ...rest } = r
+    const have = await db.shopMeta.get(r.key)
+    const m = { ...(have || {}), key: r.key }
+    for (const [k, v] of Object.entries(rest)) if (k !== 'key' && v && !m[k]) m[k] = v
+    if (!m.coverBlob && coverData) m.coverBlob = await dataUrlToBlob(coverData)
+    await db.shopMeta.put(m)
+  }
+  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } }
+  try {
+    const cart = [...new Set([...read('cart2'), ...(shop.cart || [])])]
+    localStorage.setItem('cart2', JSON.stringify(cart))
+    const orders = read('orders2')
+    const seen = new Set(orders.map((o) => o.no))
+    for (const o of shop.orders || []) if (o && !seen.has(o.no)) orders.push(o)
+    orders.sort((a, b) => String(b.date).localeCompare(String(a.date)))
+    localStorage.setItem('orders2', JSON.stringify(orders.slice(0, 40)))
+  } catch { /* Speicher gesperrt */ }
 }
 
 /* Welche Felder beim Einlesen für schon vorhandene Bücher gelten.
@@ -536,6 +583,7 @@ export async function importLibrary(payload, { replace = false } = {}) {
     await db.sessions.clear()
     await db.covers.clear()
     await db.notes.clear()
+    await db.shopMeta.clear()
   }
   let added = 0
   let skipped = 0
@@ -598,6 +646,8 @@ export async function importLibrary(payload, { replace = false } = {}) {
     await db.sessions.add({ ...rest, bookId })
     sessionsAdded++
   }
+
+  await importShop(payload.shop)
 
   return { added, updated, skipped, notesAdded, sessionsAdded }
 }
@@ -677,7 +727,7 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
     for (let i = 0; i < pool.length; i++) {
       if (shouldStop?.()) break
       const b = pool[i]
-      if (!isIncomplete(b)) continue
+      if (!isIncomplete(b) && b.isbn13) continue
       const p = matchBook(shop, b)
       if (!p) continue
       const ch = {}
@@ -694,6 +744,7 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
       if (!b.publisher && p.pub) ch.publisher = p.pub
       if (!b.year && p.y) ch.year = p.y
       if (!b.language && p.l) ch.language = p.l
+      if (!b.isbn13 && p.isbn) ch.isbn13 = p.isbn
       if (Object.keys(ch).length) { await updateBook(b.id, ch); shopFilled++ }
       if (i % 20 === 19) {
         onProgress?.({ done: 0, total: pool.length, title: 'Shop', filled: shopFilled })
@@ -772,8 +823,119 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
     await new Promise((r) => setTimeout(r, 350))
   }
 
+  let shopItems = { filled: 0, total: 0 }
+  if (!ids && !shouldStop?.()) {
+    try {
+      shopItems = await enrichShopItems({
+        onProgress: (p) => onProgress?.({ ...p, title: 'Shop-Bücher', filled: filled + p.filled }),
+        shouldStop
+      })
+    } catch { /* Shop nicht lesbar — Rest ist erledigt */ }
+  }
   onProgress?.({ done: missing.length, total: missing.length, filled })
-  return { filled, failed, skipped, total: missing.length + shopFilled }
+  return {
+    filled: filled + shopItems.filled, failed, skipped,
+    total: missing.length + shopFilled + shopItems.total, shopFilled: shopFilled + shopItems.filled
+  }
+}
+
+
+/* ---------- Shop-Bücher ergänzen ---------- */
+
+const shopTitle = (t) => String(t || '').split(/\s[-–:]\s/)[0]
+
+/** Ergänzt die Bücher des Shops: erst aus der eigenen Bibliothek (gleicher
+    Titel und Autor), dann über die Online-Kataloge per Titel und Autor.
+    Gefundene ISBN, Cover, Text, Seiten, Verlag und Jahr landen in shopMeta. */
+export async function enrichShopItems({ onProgress, shouldStop, retry = false } = {}) {
+  const shop = await loadShop()
+  const metas = new Map((await db.shopMeta.toArray()).map((m) => [m.key, m]))
+  const books = (await db.books.toArray()).filter((b) => b.status !== 'wishlist')
+  const items = shop.list.filter((p) => !p.c)
+  let filled = 0
+  let online = 0
+  let failStreak = 0 // mehrere Fehlschläge in Folge: kein Netz oder gedrosselt, Online-Teil auslassen
+
+  for (let i = 0; i < items.length; i++) {
+    if (shouldStop?.()) break
+    const p = items[i]
+    const key = shopKey(p)
+    const m = { ...(metas.get(key) || { key }) }
+    const need = () =>
+      (!p.img && !m.coverBlob) || (!p.ds && !m.description) || (!p.pg && !m.pages) ||
+      (!p.pub && !m.publisher) || (!p.y && !m.year) || (!p.isbn && !m.isbn13)
+    if (!need()) continue
+    const before = JSON.stringify([m.isbn13, m.description, m.pages, m.publisher, m.year, Boolean(m.coverBlob)])
+
+    // 1. Eigene Bibliothek
+    const tk = shop.titleKey(p.t)
+    const sn = shop.surname(p.a)
+    const lb = books.find((b) => shop.titleKey(b.title) === tk && (!sn || shop.surname(b.authors?.[0]) === sn))
+    if (lb) {
+      if (!m.isbn13 && lb.isbn13) m.isbn13 = lb.isbn13
+      if (!m.description && lb.description) m.description = lb.description
+      if (!m.pages && lb.pages) m.pages = lb.pages
+      if (!m.publisher && lb.publisher) m.publisher = lb.publisher
+      if (!m.year && lb.year) m.year = lb.year
+      if (!m.coverBlob && !p.img && lb.hasCover) m.coverBlob = (await db.covers.get(lb.id))?.blob || null
+    }
+
+    // 2. Online per Titel und Autor
+    if (need() && (retry || !m.tried) && failStreak < 3) {
+      try {
+        online++
+        const hits = await searchBooksByText(`${shopTitle(p.t)} ${p.a}`, { lang: p.l, max: 10 })
+        const good = hits.filter((h) => shop.titleKey(h.title) === tk && (!sn || h.authors.some((a) => shop.surname(a) === sn)))
+        const hit = good.find((h) => h.isbn13) || good[0]
+        if (hit) {
+          let meta = hit
+          if (hit.isbn13) {
+            try { meta = { ...hit, ...Object.fromEntries(Object.entries(await lookupIsbn(hit.isbn13)).filter(([, v]) => v)) } } catch { /* Treffer reicht */ }
+          }
+          if (!m.isbn13 && hit.isbn13) m.isbn13 = hit.isbn13
+          if (!m.description && meta.description) m.description = meta.description
+          if (!m.pages && meta.pages) m.pages = meta.pages
+          if (!m.publisher && meta.publisher) m.publisher = meta.publisher
+          if (!m.year && meta.year) m.year = meta.year
+          if (!m.coverBlob && !p.img) {
+            const blob = (await fetchCoverBlob(meta.coverUrl)) || (await fetchCoverBlob(meta.fallbackCoverUrl)) || (await fetchCoverBlob(hit.thumb))
+            if (blob) m.coverBlob = blob
+          }
+        }
+        m.tried = true
+        failStreak = 0
+      } catch { failStreak++ /* kein Netz oder gedrosselt — beim nächsten Mal wieder */ }
+      await new Promise((r) => setTimeout(r, 350))
+    }
+
+    const after = JSON.stringify([m.isbn13, m.description, m.pages, m.publisher, m.year, Boolean(m.coverBlob)])
+    if (after !== before || m.tried !== metas.get(key)?.tried) await db.shopMeta.put(m)
+    if (after !== before) filled++
+    if (i % 5 === 0) onProgress?.({ done: i, total: items.length, title: 'Shop', filled })
+  }
+  return { filled, total: items.length, online }
+}
+
+/** Alles, was Libri zu den Shop-Büchern weiß — so, wie der Shop es einliest. */
+export async function getShopMetaItems() {
+  const out = []
+  for (const m of await db.shopMeta.toArray()) {
+    out.push({
+      key: m.key,
+      isbn: m.isbn13 || '',
+      ds: m.description || '',
+      pg: m.pages || 0,
+      y: m.year || 0,
+      pub: m.publisher || '',
+      img: m.coverBlob ? await blobToDataUrl(m.coverBlob) : ''
+    })
+  }
+  return out
+}
+
+/** Hebt „schon versucht“ bei den Shop-Büchern auf. */
+export async function resetShopTried() {
+  await db.shopMeta.toCollection().modify((m) => { delete m.tried })
 }
 
 /* ---------- Notizen und Zitate ---------- */
