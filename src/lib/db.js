@@ -1,5 +1,5 @@
 import Dexie from 'dexie'
-import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars, searchBooksByText } from './metadata.js'
+import { lookupIsbn, fetchCoverBlob, dominantColor, trimBlackBars, searchBooksByText, throttleStatus } from './metadata.js'
 import { loadShop, matchBook, shopKey } from './shopData.js'
 
 export const STATUS = {
@@ -835,7 +835,8 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
   onProgress?.({ done: missing.length, total: missing.length, filled })
   return {
     filled: filled + shopItems.filled, failed, skipped,
-    total: missing.length + shopFilled + shopItems.total, shopFilled: shopFilled + shopItems.filled
+    total: missing.length + shopFilled + shopItems.total, shopFilled: shopFilled + shopItems.filled,
+    shopStats: shopItems.stats || null
   }
 }
 
@@ -853,8 +854,9 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
   const books = (await db.books.toArray()).filter((b) => b.status !== 'wishlist')
   const items = shop.list.filter((p) => !p.c)
   let filled = 0
-  let online = 0
-  let failStreak = 0 // mehrere Fehlschläge in Folge: kein Netz oder gedrosselt, Online-Teil auslassen
+  let failStreak = 0 // Fehlschläge in Folge ohne Drosselung (= kein Netz): Online-Teil auslassen
+  let waits = 0
+  const stats = { online: 0, found: 0, errors: 0, waited: 0 }
 
   for (let i = 0; i < items.length; i++) {
     if (shouldStop?.()) break
@@ -881,13 +883,29 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
     }
 
     // 2. Online per Titel und Autor
-    if (need() && (retry || !m.tried) && failStreak < 3) {
+    if (need() && (retry || m.tried !== 2) && failStreak < 3 && waits <= 8) {
+      stats.online++
       try {
-        online++
-        const hits = await searchBooksByText(`${shopTitle(p.t)} ${p.a}`, { lang: p.l, max: 10 })
-        const good = hits.filter((h) => shop.titleKey(h.title) === tk && (!sn || h.authors.some((a) => shop.surname(a) === sn)))
-        const hit = good.find((h) => h.isbn13) || good[0]
+        const tAuthor = (h) => !h.authors?.length || h.authors.some((x) => shop.surname(x) === sn)
+        const tTitle = (h) => {
+          const hk = shop.titleKey(h.title)
+          return hk === tk || (Math.min(hk.length, tk.length) >= 6 && (hk.includes(tk) || tk.includes(hk)))
+        }
+        const q = shopTitle(p.t)
+        let good = []
+        for (const attempt of [
+          [`${q} ${p.a}`, p.l],
+          [`${q} ${p.a}`, null],
+          [`intitle:${q} inauthor:${sn}`, null]
+        ]) {
+          const hits = await searchBooksByText(attempt[0], { lang: attempt[1], max: 20 })
+          good = hits.filter((h) => tTitle(h) && tAuthor(h))
+          if (good.length) break
+          await new Promise((r) => setTimeout(r, 300))
+        }
+        const hit = good.find((h) => h.isbn13 && h.pages) || good.find((h) => h.isbn13) || good[0]
         if (hit) {
+          stats.found++
           let meta = hit
           if (hit.isbn13) {
             try { meta = { ...hit, ...Object.fromEntries(Object.entries(await lookupIsbn(hit.isbn13)).filter(([, v]) => v)) } } catch { /* Treffer reicht */ }
@@ -902,10 +920,23 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
             if (blob) m.coverBlob = blob
           }
         }
-        m.tried = true
+        m.tried = 2
         failStreak = 0
-      } catch { failStreak++ /* kein Netz oder gedrosselt — beim nächsten Mal wieder */ }
-      await new Promise((r) => setTimeout(r, 350))
+      } catch {
+        stats.errors++
+        const left = Math.max(0, ...Object.values(throttleStatus()))
+        if (left > 0) {
+          // Gedrosselt: warten, bis die Sperre vorbei ist, und dasselbe Buch nochmal.
+          waits++
+          stats.waited++
+          onProgress?.({ done: i, total: items.length, title: 'Shop (Pause wegen Drosselung)', filled })
+          await new Promise((r) => setTimeout(r, Math.min(left, 95) * 1000 + 500))
+          i--
+          continue
+        }
+        failStreak++ // kein Netz — nach drei Fehlschlägen in Folge Online-Teil auslassen
+      }
+      await new Promise((r) => setTimeout(r, 900))
     }
 
     const after = JSON.stringify([m.isbn13, m.description, m.pages, m.publisher, m.year, Boolean(m.coverBlob)])
@@ -913,7 +944,7 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
     if (after !== before) filled++
     if (i % 5 === 0) onProgress?.({ done: i, total: items.length, title: 'Shop', filled })
   }
-  return { filled, total: items.length, online }
+  return { filled, total: items.length, stats }
 }
 
 /** Alles, was Libri zu den Shop-Büchern weiß — so, wie der Shop es einliest. */

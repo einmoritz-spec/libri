@@ -252,6 +252,7 @@ export default function Settings({ notify, onOpenShop }) {
               <p className="setting-result">
                 {cover.filled} von {cover.total} ergänzt
                 {cover.skipped ? ` · ${cover.skipped} übersprungen` : ''}
+                {cover.shopStats ? ` · Shop: ${cover.shopStats.found} online gefunden, ${cover.shopStats.errors} Fehler${cover.shopStats.waited ? `, ${cover.shopStats.waited}× Pause wegen Drosselung` : ''}` : ''}
               </p>
             )}
             <button className="btn" onClick={retryAll}>Erfolglose erneut versuchen</button>
