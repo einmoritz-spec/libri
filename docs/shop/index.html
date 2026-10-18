@@ -64,7 +64,7 @@ button{cursor:pointer}
 .tile:hover{border-color:var(--accent)}
 .stack{display:flex;height:84px}
 .stack .cv{width:56px;font-size:6px;flex:none;margin-right:calc(-1*var(--ov,26px));box-shadow:0 4px 8px -3px rgba(0,0,0,.5)}
-.mt{display:flex;margin:8px 0 4px;width:max-content;max-width:100%}.mt button{padding:8px 18px;font-size:14px}.tiles.big{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
+.mt{display:flex;margin:8px 0 4px;width:max-content;max-width:100%}.mt button{padding:8px 18px;font-size:14px}.tiles.big{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}@media (max-width:520px){.tiles.big{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tiles.big .tile{padding:10px}}
 .tile b{font:600 15px/1.2 var(--serif);display:block;text-wrap:balance}
 .tile small{color:var(--muted);font-size:12px}
 .genres{display:flex;gap:8px;flex-wrap:wrap}
@@ -351,7 +351,7 @@ function serTiles(L){
   const gs=new Map();L.filter(isSeries).forEach(p=>{(gs.get(p.g)||gs.set(p.g,[]).get(p.g)).push(p)});
   const arr=[...gs.entries()].sort((a,b)=>a[0].localeCompare(b[0],'de'));
   return arr.map(([g,M])=>{const l=sorted(M.filter(p=>!p.c));const base=l.length?l:M;const both=base.some(p=>p.l==='de')&&base.some(p=>p.l==='en');const lg=S.lang||(base.some(p=>p.l==='de')?'de':'en');const one=base.filter(p=>p.l===lg);
-    const stk=both&&!S.lang?one.slice(0,3):one.length>6?one.slice(0,4):one;const nn=stk.length;const ov=nn<=3?26:Math.min(44,Math.round(56-74/(nn-1)));
+    const stk=both&&!S.lang?one.slice(0,3):one.length>6?one.slice(0,4):one;const nn=stk.length;const ov=nn<=1?0:Math.min(46,Math.max(20,Math.round(56-50/(nn-1))));
     const nm=S.lang==='en'?serName(g,'en'):g.split(' / ')[0];
     return `<button class="tile" data-series="${esc(g)}" data-lang="${S.lang||''}"><div class="stack" style="--ov:${ov}px">${stk.map(p=>cover(p)).join('')}</div><span><b>${esc(nm)}</b><small>${M.length} ${M.length===1?'Buch':'Bücher'} · ${esc(M[0].p)}</small></span></button>`}).join('');
 }
