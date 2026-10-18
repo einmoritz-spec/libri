@@ -64,6 +64,7 @@ button{cursor:pointer}
 .tile:hover{border-color:var(--accent)}
 .stack{display:flex;height:84px}
 .stack .cv{width:56px;font-size:6px;flex:none;margin-right:-26px;box-shadow:0 4px 8px -3px rgba(0,0,0,.5)}
+.mt{display:flex;margin:8px 0 4px;width:max-content;max-width:100%}.mt button{padding:8px 18px;font-size:14px}.tiles.big{grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
 .tile b{font:600 15px/1.2 var(--serif);display:block;text-wrap:balance}
 .tile small{color:var(--muted);font-size:12px}
 .genres{display:flex;gap:8px;flex-wrap:wrap}
@@ -274,7 +275,7 @@ function card(p){
 let cart=new Set();
 try{(JSON.parse(localStorage.getItem('cart2')||'[]')).forEach(k=>{const e=ent(k);if(e)cart.add(e.k)})}catch(e){}
 function saveCart(){try{localStorage.setItem('cart2',JSON.stringify([...cart]))}catch(e){}}
-const S={med:'',ser:'',sl:'',view:'start',q:'',lang:'',genre:'',author:'',series:'',fmt:'',sort:'rel',limit:48,fopen:false};
+const S={med:'',ser:'',sl:'',view:'start',q:'',lang:'',genre:'',author:'',series:'',fmt:'',sort:'rel',limit:48,fopen:false,mode:'ser'};
 let lastOrder=null;
 let HIST=[];try{HIST=JSON.parse(localStorage.getItem('orders2')||'[]').filter(o=>o&&o.keys);HIST.forEach(o=>{o.keys=o.keys.map(k=>{const e=ent(k);return e?e.k:null}).filter(Boolean)})}catch(e){}
 function saveHist(){try{localStorage.setItem('orders2',JSON.stringify(HIST.slice(0,40)))}catch(e){}}
@@ -346,13 +347,32 @@ function filterPanel(){
    <div class="fg"><label class="lab" for="f-au">Autor</label><select id="f-au"><option value="">Alle Autoren</option>${authors.map(a=>`<option value="${esc(a)}"${S.author===a?' selected':''}>${esc(a)}</option>`).join('')}</select></div>
    ${(activeN()||S.q)?'<button class="reset" data-reset="1">Filter zurücksetzen</button>':''}</aside>`;
 }
+function serTiles(L){
+  const gs=new Map();L.filter(isSeries).forEach(p=>{(gs.get(p.g)||gs.set(p.g,[]).get(p.g)).push(p)});
+  const arr=[...gs.entries()].sort((a,b)=>a[0].localeCompare(b[0],'de'));
+  return arr.map(([g,M])=>{const l=sorted(M.filter(p=>!p.c));const base=l.length?l:M;const de=base.filter(p=>p.l==='de');const stk=(de.length?de:base).slice(0,3);
+    const nm=S.lang==='en'?serName(g,'en'):g.split(' / ')[0];
+    return `<button class="tile" data-series="${esc(g)}" data-lang="${S.lang||''}"><div class="stack">${stk.map(p=>cover(p)).join('')}</div><span><b>${esc(nm)}</b><small>${M.length} ${M.length===1?'Buch':'Bücher'} · ${esc(M[0].p)}</small></span></button>`}).join('');
+}
 function shopView(){
   const L=sorted(P.filter(matches));const n=activeN();
-  const shown=L.slice(0,S.limit);
-  const ttl=S.series?S.series.split(' / ')[0]:S.genre||(S.q?'Suche':'Alle Bücher');
-  return `<div class="ph"><h1>${esc(ttl)}</h1><span class="cnt">${L.length} ${L.length===1?'Buch':'Bücher'}</span></div>
+  const mode=(S.q||S.series)?'books':S.mode;
+  const ttl=S.series?S.series.split(' / ')[0]:S.genre||(S.q?'Suche':mode==='ser'?'Alle Reihen':'Alle Bücher');
+  const toggle=(S.q||S.series)?'':`<div class="lt mt" role="group" aria-label="Ansicht"><button data-mode="ser" aria-pressed="${mode==='ser'}">Alle Reihen</button><button data-mode="books" aria-pressed="${mode==='books'}">Alle Bücher</button></div>`;
+  let body,cnt;
+  if(!L.length){body=`<div class="empty"><h3>Keine Treffer</h3><p>Dazu gibt es nichts in der Bibliothek. Lockere die Suche oder setze die Filter zurück.</p><button class="reset" data-reset="1" style="justify-self:center">Filter zurücksetzen</button></div>`;cnt=`0 Bücher`}
+  else if(mode==='ser'){
+    const ser=L.filter(isSeries),sing=L.filter(p=>!isSeries(p));const ns=new Set(ser.map(p=>p.g)).size;
+    cnt=`${ns} Reihen${sing.length?' · '+sing.length+' Einzelbände':''}`;
+    const shownS=sing.slice(0,S.limit);
+    body=(ns?`<div class="tiles big">${serTiles(L)}</div>`:'')+(sing.length?`<div class="sh"><h2>Einzelbände</h2></div><div class="grid">${shownS.map(p=>card(p)).join('')}</div>${sing.length>S.limit?`<button class="more" data-more="1">Mehr laden (${sing.length-S.limit})</button>`:''}`:'');
+  } else {
+    const shown=L.slice(0,S.limit);cnt=`${L.length} ${L.length===1?'Buch':'Bücher'}`;
+    body=`<div class="grid">${shown.map(p=>card(p)).join('')}</div>${L.length>S.limit?`<button class="more" data-more="1">Mehr laden (${L.length-S.limit})</button>`:''}`;
+  }
+  return `<div class="ph"><h1>${esc(ttl)}</h1><span class="cnt">${cnt}</span></div>${toggle}
    <button class="fbtn" data-fopen="1" aria-expanded="${S.fopen}">Filter${n?' · '+n:''}</button>
-   <div class="lay">${filterPanel()}<div>${L.length?`<div class="grid">${shown.map(p=>card(p)).join('')}</div>${L.length>S.limit?`<button class="more" data-more="1">Mehr laden (${L.length-S.limit})</button>`:''}`:`<div class="empty"><h3>Keine Treffer</h3><p>Dazu gibt es nichts in der Bibliothek. Lockere die Suche oder setze die Filter zurück.</p><button class="reset" data-reset="1" style="justify-self:center">Filter zurücksetzen</button></div>`}</div></div>`;
+   <div class="lay">${filterPanel()}<div>${body}</div></div>`;
 }
 function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[1]):g}
 function seriesView(){
@@ -365,7 +385,7 @@ function seriesView(){
   items.forEach(p=>{if(subs.size>1&&p.s!==cur){cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}body+=card(p)});
   const au=[...new Set(all.map(p=>p.p))].slice(0,3).join(', ');
   const tog=langs.length>1?`<div class="lt" role="group" aria-label="Sprache">${langs.map(l=>`<button data-sl="${l}" aria-pressed="${l===lang}">${l.toUpperCase()}</button>`).join('')}</div>`:'';
-  return `<button class="back" data-go="shop">‹ Alle Bücher</button>
+  return `<button class="back" data-go="shop">‹ Zurück</button>
    <div class="ph" style="margin-top:6px"><h1>${esc(serName(S.ser,lang))}</h1><span class="cnt">${items.length} ${items.length===1?'Buch':'Bücher'}</span></div>
    <p class="subl">${esc(au)}</p>
    <div class="sbar">${tog}${vols.length?`<button class="pri" data-addall="1">${allIn?'Alle im Warenkorb ✓ (entfernen)':nIn?`Restliche ${vols.length-nIn} Bände hinzufügen`:`Alle ${vols.length} Bände in den Warenkorb`}</button>`:''}</div>
@@ -568,6 +588,7 @@ document.addEventListener('click',e=>{
     if(k==='book'){openProduct(+v);return}}
   if(!t.closest('.sr'))sgHide();
   if(t.closest('[data-more-ds]')){$('#ds').classList.toggle('open');t.closest('[data-more-ds]').textContent=$('#ds').classList.contains('open')?'Weniger':'Mehr lesen';return}
+  if(el=t.closest('[data-mode]')){S.mode=el.dataset.mode;S.limit=48;render(true);return}
   if(el=t.closest('[data-sl]')){S.sl=el.dataset.sl;render(true);return}
   if(t.closest('[data-addall]')){const lg=['de','en'].includes(S.sl)?S.sl:(P.some(p=>p.g===S.ser&&p.l==='de')?'de':'en');const v=P.filter(p=>p.g===S.ser&&!p.c&&p.l===lg);const mm=p=>p.eb?'e':'b';const all=v.every(p=>inCart(p,mm(p)));v.forEach(p=>all?cart.delete(kk(p,mm(p))):cart.add(kk(p,mm(p))));saveCart();render(true);return}
   if(t.closest('#histbtn')){openHistory();return}
