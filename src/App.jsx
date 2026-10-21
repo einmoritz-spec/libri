@@ -34,7 +34,14 @@ export default function App() {
   const [authorName, setAuthorName] = useState(null)
   const [quickId, setQuickId] = useState(null)
   const [toast, setToast] = useState(null)
-  const [shopOpen, setShopOpen] = useState(false)
+  const [shopOpen, setShopOpen] = useState(() => {
+    // Nach dem Aktualisieren (oder wenn Android die Seite im Hintergrund beendet hat)
+    // direkt wieder im Shop landen, solange der Besuch noch nicht lange her ist.
+    try {
+      const t = Number(localStorage.getItem('libri:shopOpen'))
+      return t > 0 && Date.now() - t < 30 * 60 * 1000
+    } catch { return false }
+  })
 
   const openBook = useLiveQuery(
     () => (openId ? db.books.get(openId) : undefined),
@@ -122,6 +129,16 @@ export default function App() {
     setTab('library')
   })
   useBackLayer(shopOpen, () => setShopOpen(false))
+  // Beim Aktualisieren der Seite im Shop bleiben (Shop-Stand merkt sich der Shop selbst).
+  useEffect(() => {
+    try {
+      if (shopOpen) localStorage.setItem('libri:shopOpen', String(Date.now()))
+      else {
+        localStorage.removeItem('libri:shopOpen')
+        localStorage.removeItem('libri:shopnav')
+      }
+    } catch { /* ohne Speicher einfach wie bisher */ }
+  }, [shopOpen])
   useBackLayer(Boolean(quickId), () => setQuickId(null))
   useBackLayer(Boolean(authorName), () => setAuthorName(null))
   useBackLayer(Boolean(draft), () => setDraft(null))
@@ -180,7 +197,10 @@ export default function App() {
         <div className="screen"><p className="hint"><span className="spinner" /> Einen Moment…</p></div>
       }>
         {tab === 'stats' && <Stats onOpenBook={openBookById} notify={notify} />}
-        {tab === 'settings' && <Settings notify={notify} onOpenShop={() => setShopOpen(true)} />}
+        {tab === 'settings' && <Settings notify={notify} onOpenShop={() => {
+          try { localStorage.removeItem('libri:shopnav') } catch { /* egal */ }
+          setShopOpen(true)
+        }} />}
         {shopOpen && <ShopView onClose={() => setShopOpen(false)} />}
       </Suspense>
 
