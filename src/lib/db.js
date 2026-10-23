@@ -1300,3 +1300,205 @@ export async function isAutoBackupDue() {
   const count = await db.books.count()
   return count > 0
 }
+
+
+/* ---------- Shop ⇄ Bibliothek ---------- */
+
+const STATUS_RANK = { read: 5, reading: 4, owned: 3, dnf: 2, wishlist: 1 }
+
+/** Welches Shop-Buch ist wie in der Bibliothek? Schlüssel (shopKey) → Status.
+    Gemeint ist der „beste“ Status, falls ein Titel mehrfach vorkommt. */
+export async function getShopLibraryStatus() {
+  const shop = await loadShop()
+  const out = {}
+  for (const b of await db.books.toArray()) {
+    const p = (b.shopKey && shop.byKey.get(b.shopKey)) || matchBook(shop, b)
+    if (!p) continue
+    const k = shopKey(p)
+    if (!out[k] || (STATUS_RANK[b.status] || 0) > (STATUS_RANK[out[k]] || 0)) out[k] = b.status
+  }
+  return out
+}
+
+const WISH_QUEUE = 'libri:wishQ'
+
+function splitAuthors(a) {
+  return String(a || '').split(/\s+&\s+|,\s+|\s+und\s+/).map((x) => x.trim()).filter(Boolean)
+}
+
+const serPart = (g, lang) => {
+  const a = String(g || '').split(' / ')
+  return a.length > 1 ? (lang === 'de' ? a[0] : a[1]) : String(g || '')
+}
+
+/** Aus einem Shop-Buch ein Libri-Buch (Wunschliste) machen — mit allen Angaben. */
+async function wishBookFromShop(shop, p, meta, medium, orderNo, status = 'wishlist') {
+  const m = meta || {}
+  const img = p.img || m.coverBlob || null
+  let coverBlob = null
+  if (m.coverBlob instanceof Blob) coverBlob = m.coverBlob
+  else if (img) coverBlob = await dataUrlToBlob(img)
+  if (!coverBlob) {
+    // Cover, die der Shop schon online gefunden hat.
+    try {
+      const cc = JSON.parse(localStorage.getItem('covc1') || '{}')[shopKey(p)]
+      const url = typeof cc === 'string' && cc ? cc : (p.iu || [])[0]
+      if (url) coverBlob = await fetchCoverBlob(url)
+    } catch { /* ohne Cover geht es auch */ }
+  }
+  const isSer = p.k === 'reihe'
+  let seriesIndex = null
+  let subseries = ''
+  let subseriesIndex = null
+  const num = parseFloat(String(p.n || '').replace('–', '-'))
+  if (isSer && !p.c) {
+    if (p.s) {
+      subseries = serPart(p.s, p.l)
+      if (Number.isFinite(num)) subseriesIndex = num
+      const peers = shop.list.filter((x) => x.g === p.g && x.l === p.l && !x.c)
+      const pos = peers.findIndex((x) => x === p)
+      if (pos >= 0) seriesIndex = pos + 1
+    } else if (Number.isFinite(num)) seriesIndex = num
+  }
+  const isbn = String(p.isbn || m.isbn13 || '').replace(/[^0-9X]/gi, '')
+  const book = {
+    title: p.t,
+    authors: splitAuthors(p.a),
+    series: isSer ? serPart(p.g, p.l) : '',
+    seriesIndex,
+    subseries,
+    subseriesIndex,
+    language: p.l || '',
+    isbn13: isbn.length === 13 ? isbn : null,
+    description: p.ds || m.description || '',
+    pages: p.pg || m.pages || null,
+    publisher: p.pub || m.publisher || '',
+    year: p.y || m.year || null,
+    tags: [...new Set([p.ge, ...(p.gx || []), p.c ? 'Sammelband' : ''].filter(Boolean))],
+    format: medium === 'b' ? 'print' : 'ebook',
+    status,
+    source: 'shop',
+    shopKey: shopKey(p),
+    notes: orderNo ? `Aus Shop-Bestellung ${orderNo} (${medium === 'b' ? 'Buch' : 'eBook'})` : '',
+    coverBlob
+  }
+  if (coverBlob) {
+    const sc = await dominantColor(coverBlob)
+    if (sc) book.spineColor = sc
+  }
+  return book
+}
+
+let flushing = null
+
+/** Legt alles, was im Shop bestellt wurde, auf die Wunschliste. Der Shop merkt
+    sich seine Bestellungen in einer Warteschlange (localStorage), damit nichts
+    verloren geht, auch wenn Libri gerade nicht offen war. Was schon in der
+    Bibliothek steht — egal mit welchem Status — wird nicht noch einmal angelegt. */
+export function flushShopOrders() {
+  if (flushing) return flushing
+  flushing = (async () => {
+    let queue = []
+    try { queue = JSON.parse(localStorage.getItem(WISH_QUEUE) || '[]') } catch { queue = [] }
+    if (!Array.isArray(queue) || !queue.length) return { added: 0, skipped: 0 }
+    try { localStorage.removeItem(WISH_QUEUE) } catch { /* egal */ }
+    const rest = []
+    const shelfIds = []
+    let added = 0
+    let skipped = 0
+    try {
+      const shop = await loadShop()
+      const have = await getShopLibraryStatus()
+      const done = new Set()
+      for (const q of queue) {
+        const p = shop.byKey.get(q.k)
+        if (!p) continue
+        const st = q.st === 'owned' ? 'owned' : 'wishlist'
+        // Schon im Regal, oder auf der Wunschliste und nur Wunschliste verlangt: nichts zu tun.
+        if (done.has(q.k) || (have[q.k] && !(st === 'owned' && have[q.k] === 'wishlist'))) { skipped++; continue }
+        done.add(q.k)
+        try {
+          if (have[q.k] === 'wishlist') {
+            // Von der Wunschliste ins Regal.
+            const ids = (await db.books.toArray())
+              .filter((b) => b.status === 'wishlist' && ((b.shopKey && b.shopKey === q.k) || matchBook(shop, b) === p))
+              .map((b) => b.id)
+            for (const id of ids) await db.books.update(id, { status: 'owned' })
+            shelfIds.push(...ids)
+            added += ids.length ? 1 : 0
+            continue
+          }
+          const meta = await db.shopMeta.get(q.k)
+          const nid = await addBook(await wishBookFromShop(shop, p, meta, q.m, q.no, st))
+          if (st === 'owned') shelfIds.push(nid)
+          added++
+        } catch { rest.push(q) }
+      }
+    } catch {
+      rest.push(...queue)
+    }
+    if (rest.length) {
+      try {
+        const cur = JSON.parse(localStorage.getItem(WISH_QUEUE) || '[]')
+        localStorage.setItem(WISH_QUEUE, JSON.stringify([...rest, ...cur].slice(0, 300)))
+      } catch { /* egal */ }
+    }
+    // Fürs Regal: fehlende Angaben (Seiten, Verlag, Text, Cover …) im Hintergrund suchen.
+    if (shelfIds.length) setTimeout(() => { enrichShelfBooks(shelfIds).catch(() => {}) }, 0)
+    return { added, skipped }
+  })().finally(() => { flushing = null })
+  return flushing
+}
+
+
+/** Fehlende Angaben für einzelne Bücher suchen — wie „Angaben ergänzen“ in den
+    Einstellungen: erst Shop-Daten und ISBN-Kataloge, dann bei fehlender ISBN
+    per Titel und Autor online. */
+export async function enrichShelfBooks(ids) {
+  try { await backfillCovers({ ids }) } catch { /* weiter mit der Titelsuche */ }
+  const shop = await loadShop().catch(() => null)
+  for (const id of ids) {
+    let b = await db.books.get(id)
+    if (!b || !isIncomplete(b)) continue
+    try {
+      const au = String(b.authors?.[0] || '')
+      const sn = shop ? shop.surname(au) : au.split(' ').pop().toLowerCase()
+      const tk = shop ? shop.titleKey(b.title) : b.title.toLowerCase()
+      const q = shopTitle(b.title)
+      let good = []
+      for (const [text, lang] of [[`${q} ${au}`, b.language], [`${q} ${au}`, null], [`intitle:${q} inauthor:${sn}`, null]]) {
+        const hits = await searchBooksByText(text, { lang: lang || null, max: 20 })
+        good = hits.filter((h) => {
+          const hk = shop ? shop.titleKey(h.title) : String(h.title).toLowerCase()
+          const titleOk = hk === tk || (Math.min(hk.length, tk.length) >= 6 && (hk.includes(tk) || tk.includes(hk)))
+          const authOk = !h.authors?.length || h.authors.some((x) => (shop ? shop.surname(x) : x.split(' ').pop().toLowerCase()) === sn)
+          return titleOk && authOk
+        })
+        if (good.length) break
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      const hit = good.find((h) => h.isbn13 && h.pages) || good.find((h) => h.isbn13) || good[0]
+      if (!hit) continue
+      let meta = hit
+      if (hit.isbn13) {
+        try { meta = { ...hit, ...Object.fromEntries(Object.entries(await lookupIsbn(hit.isbn13)).filter(([, v]) => v)) } } catch { /* Treffer reicht */ }
+      }
+      const ch = {}
+      if (!b.isbn13 && hit.isbn13) ch.isbn13 = hit.isbn13
+      if (!b.description && meta.description) ch.description = meta.description
+      if (!b.pages && meta.pages) ch.pages = meta.pages
+      if (!b.publisher && meta.publisher) ch.publisher = meta.publisher
+      if (!b.year && meta.year) ch.year = meta.year
+      if (!b.hasCover) {
+        const blob = (await fetchCoverBlob(meta.coverUrl)) || (await fetchCoverBlob(meta.fallbackCoverUrl)) || (await fetchCoverBlob(hit.thumb))
+        if (blob) {
+          ch.coverBlob = blob
+          const sc = await dominantColor(blob)
+          if (sc) ch.spineColor = sc
+        }
+      }
+      if (Object.keys(ch).length) await updateBook(id, ch)
+    } catch { /* nächstes Buch */ }
+    await new Promise((r) => setTimeout(r, 350))
+  }
+}
