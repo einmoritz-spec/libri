@@ -161,7 +161,7 @@ button.tag{background:var(--surface);color:inherit;font-family:inherit;cursor:po
 button.tag:active{background:var(--line2)}
 button.auL{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--muted);text-align:left;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line2);text-underline-offset:3px}
 .acts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:16px}
-.acts .pri{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 12px;line-height:1.2}
+.acts .pri{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:10px 12px;line-height:1.2}
 .acts .pri small{font-size:11px;font-weight:600;opacity:.85}
 .acts .pri.shelf:not(.on){background:none;color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent)}
 .acts .pri.shelf[disabled]{opacity:.85}
@@ -469,11 +469,13 @@ function shopView(){
    <div class="lay">${filterPanel()}<div>${body}</div></div>`;
 }
 function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[1]):g}
+// Bände nach Bandnummer ordnen (Unterreihen bleiben zusammen), egal in welcher Reihenfolge sie in den Katalog kamen.
+function ordSer(a){const so=new Map();a.forEach(p=>{if(!so.has(p.s))so.set(p.s,so.size)});const nv=p=>{const v=parseFloat(String(p.n).replace('–','-'));return isNaN(v)?1e9:v};return a.map((p,i)=>[p,i]).sort((x,y)=>so.get(x[0].s)-so.get(y[0].s)||nv(x[0])-nv(y[0])||x[1]-y[1]).map(v=>v[0])}
 function seriesView(){
   const all=P.filter(p=>p.g===S.ser);if(!all.length)return shopView();
   const langs=['de','en'].filter(l=>all.some(p=>p.l===l));
   const lang=langs.includes(S.sl)?S.sl:langs[0];
-  const items=all.filter(p=>p.l===lang);
+  const items=ordSer(all.filter(p=>p.l===lang));
   const mm=p=>p.eb?'e':'b';const allV=items.filter(p=>!p.c);const vols=allV.filter(p=>!have(p));const nHave=allV.length-vols.length;const nIn=vols.filter(p=>inCart(p,mm(p))).length;const allIn=vols.length>0&&nIn===vols.length;
   const subs=new Set(items.map(p=>p.s));let cur=null,body='';
   items.forEach(p=>{if(subs.size>1&&p.s!==cur){cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}body+=card(p)});
@@ -595,7 +597,7 @@ function readBtns(p){let on=false;try{on=localStorage.getItem('libri:readBtnShop
   if(!on||!p.fl||!p.fl.length)return '';
   return `<div class="acts reads">${p.fl.map(f=>{const l=f.note||(p.fl.length>1?String(f.ext||'').toUpperCase():'');return `<a class="pri" target="_blank" rel="noopener noreferrer" href="https://drive.google.com/file/d/${esc(f.id)}/view"><span>Lesen${l?' ('+esc(l)+')':''}</span></a>`}).join('')}</div>`}
 function shelfBtn(p){const st=stOf(p),on=HAVE.has(st);
-  return `<button class="pri shelf${on?' on':''}" data-shelf="${p.id}"${on?' disabled':''}><span>${on?'Im Regal ✓':'In die Bibliothek'}</span><small>${on?'schon in Libri':st==='wishlist'?'von der Wunschliste ins Regal':'ins Regal legen'}</small></button>`}
+  return `<button class="pri shelf${on?' on':''}" data-shelf="${p.id}"${on?' disabled':''}><span>${on?'Im Regal ✓':'In die Bibliothek'}</span></button>`}
 function toShelf(id){const p=P[id];if(!p||HAVE.has(stOf(p)))return;
   try{const cur=JSON.parse(localStorage.getItem('libri:wishQ')||'[]');cur.push({k:p.k2,m:meds(p)[0]||'e',no:'',st:'owned'});localStorage.setItem('libri:wishQ',JSON.stringify(cur.slice(-300)))}catch(e){}
   LIB[p.k2]='owned';
@@ -603,7 +605,7 @@ function toShelf(id){const p=P[id];if(!p||HAVE.has(stOf(p)))return;
   openProduct(id,true);render(true)}
 function openProduct(id,keep){
   const p=P[id];
-  const more=isSeries(p)?P.filter(x=>x.g===p.g&&x.l===p.l&&x.id!==p.id):[];
+  const more=isSeries(p)?ordSer(P.filter(x=>x.g===p.g&&x.l===p.l&&x.id!==p.id)):[];
   const sim=similar(p);
   const mt=[p.pub,p.y,p.pg?p.pg+' Seiten':'',p.isbn?'ISBN '+p.isbn:''].filter(Boolean).join(' · ');
   $('#mb').dataset.id=id;
