@@ -111,6 +111,8 @@ button{cursor:pointer}
 .op{border:1.5px solid var(--line2);background:transparent;border-radius:999px;padding:4px 11px;font-size:12.5px;font-weight:500}
 .op[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);font-weight:700}
 .op small{color:var(--muted);margin-left:3px}
+.fmore{justify-self:start;border:0;background:none;color:var(--accent);font:600 13px var(--sans);padding:4px 0}
+.fextra{display:grid;gap:14px}.fextra[hidden]{display:none}
 select{height:36px;border:1.5px solid var(--line2);background:var(--surface);border-radius:10px;padding:0 8px;width:100%;min-width:0}
 .reset{border:0;background:none;color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:2px 0;justify-self:start}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:20px 10px;padding-top:12px}
@@ -349,7 +351,7 @@ function card(p){
 let cart=new Set();
 try{(JSON.parse(localStorage.getItem('cart2')||'[]')).forEach(k=>{const e=ent(k);if(e)cart.add(e.k)})}catch(e){}
 function saveCart(){try{localStorage.setItem('cart2',JSON.stringify([...cart]))}catch(e){}}
-const S={med:'',ser:'',sl:'',view:'start',q:'',lang:'',genre:'',author:'',series:'',fmt:'',rd:'',cmp:'',len:'',sort:'rel',limit:48,fopen:false,mode:'ser'};
+const S={med:'',ser:'',sl:'',view:'start',q:'',lang:'',genre:'',author:'',series:'',fmt:'',rd:'',cmp:'',len:'',sort:'rel',limit:48,fopen:false,fmore:false,mode:'ser'};
 let lastOrder=null;const SUBPICK={};
 let HIST=[];try{HIST=JSON.parse(localStorage.getItem('orders2')||'[]').filter(o=>o&&o.keys);HIST.forEach(o=>{o.keys=o.keys.map(k=>{const e=ent(k);return e?e.k:null}).filter(Boolean)})}catch(e){}
 function saveHist(){try{localStorage.setItem('orders2',JSON.stringify(HIST.slice(0,40)))}catch(e){}}
@@ -420,16 +422,20 @@ function startView(){
 }
 function filterPanel(){
   const opt=(arr,cur,fn,key)=>arr.map(([v,t,c])=>`<button class="op" data-${key}="${esc(v)}" aria-pressed="${cur===v}">${esc(t)}${c!=null?`<small>${c}</small>`:''}</button>`).join('');
+  const nm=(S.med?1:0)+(S.fmt?1:0)+(S.cmp?1:0)+(S.len?1:0)+(S.series?1:0)+(S.author?1:0);
   return `<aside class="fp${S.fopen?'':' closed'}" id="fp" aria-label="Filter">
-   <div class="fg"><span class="lab">Sortierung</span><select id="f-sort">${[['rel',S.q?'Beste Treffer':'Reihe & Band'],['az','Titel A–Z'],['author','Autor A–Z'],['new','Neu hinzugefügt'],['len','Größte Reihe zuerst']].map(([v,t])=>`<option value="${v}"${S.sort===v?' selected':''}>${t}</option>`).join('')}</select></div>
-   ${LIBOK?`<div class="fg"><span class="lab">Meine Bibliothek</span><div class="opts">${opt([['','Alle'],['new','Neu für mich'],['unread','Noch ungelesen'],['read','Gelesen'],['wish','Wunschliste']],S.rd,0,'rd')}</div></div>`:''}
-   <div class="fg"><span class="lab">Reihen</span><div class="opts">${opt([['','Alle'],['full','Nur lückenlose']],S.cmp,0,'cmp')}${opt([['','Jede Länge'],['3','ab 3 Bänden'],['6','ab 6'],['10','ab 10']],S.len,0,'len')}</div></div>
-   <div class="fg"><span class="lab">Medium</span><div class="opts">${opt([['','Alle'],['e','eBook',P.filter(p=>p.eb).length],['b','Buch',P.filter(p=>p.pb).length]],S.med,0,'med')}</div></div>
    <div class="fg"><span class="lab">Sprache</span><div class="opts">${opt([['','Alle'],['de','Deutsch'],['en','Englisch']],S.lang,0,'lang')}</div></div>
-   <div class="fg"><span class="lab">Genre</span><div class="opts">${opt([['','Alle'],...GEN.filter(g=>genC[g]).map(g=>[g,g,genC[g]])],S.genre,0,'genre')}</div></div>
-   <div class="fg"><span class="lab">Format</span><div class="opts">${opt([['','Alle'],...Object.keys(fmtC).sort().map(f=>[f,f.toUpperCase(),fmtC[f]])],S.fmt,0,'fmt')}</div></div>
-   <div class="fg"><label class="lab" for="f-ser">Reihe</label><select id="f-ser"><option value="">Alle Reihen</option>${seriesNames.map(s=>`<option value="${esc(s)}"${S.series===s?' selected':''}>${esc(s)}</option>`).join('')}</select></div>
-   <div class="fg"><label class="lab" for="f-au">Autor</label><select id="f-au"><option value="">Alle Autoren</option>${authors.map(a=>`<option value="${esc(a)}"${S.author===a?' selected':''}>${esc(a)}</option>`).join('')}</select></div>
+   ${LIBOK?`<div class="fg"><span class="lab">Meine Bibliothek</span><div class="opts">${opt([['','Alle'],['new','Neu für mich'],['unread','Ungelesen'],['read','Gelesen'],['wish','Wunschliste']],S.rd,0,'rd')}</div></div>`:''}
+   <div class="fg"><label class="lab" for="f-genre">Genre</label><select id="f-genre"><option value="">Alle Genres</option>${GEN.filter(g=>genC[g]).map(g=>`<option value="${esc(g)}"${S.genre===g?' selected':''}>${esc(g)} (${genC[g]})</option>`).join('')}</select></div>
+   <div class="fg"><label class="lab" for="f-sort">Sortierung</label><select id="f-sort">${[['rel',S.q?'Beste Treffer':'Reihe & Band'],['az','Titel A–Z'],['author','Autor A–Z'],['new','Neu hinzugefügt'],['len','Größte Reihe zuerst']].map(([v,t])=>`<option value="${v}"${S.sort===v?' selected':''}>${t}</option>`).join('')}</select></div>
+   <button class="fmore" data-fmore="1" aria-expanded="${!!S.fmore}">${S.fmore?'Weniger Filter ▴':'Mehr Filter'+(nm?' · '+nm:'')+' ▾'}</button>
+   <div class="fextra"${S.fmore?'':' hidden'}>
+    <div class="fg"><span class="lab">Medium</span><div class="opts">${opt([['','Alle'],['e','eBook'],['b','Buch']],S.med,0,'med')}</div></div>
+    <div class="fg"><span class="lab">Format</span><div class="opts">${opt([['','Alle'],...Object.keys(fmtC).sort().map(f=>[f,f.toUpperCase()])],S.fmt,0,'fmt')}</div></div>
+    <div class="fg"><span class="lab">Reihen</span><div class="opts">${opt([['','Alle'],['full','Lückenlos']],S.cmp,0,'cmp')}${opt([['','Jede Länge'],['3','ab 3'],['6','ab 6'],['10','ab 10']],S.len,0,'len')}</div></div>
+    <div class="fg"><label class="lab" for="f-ser">Reihe</label><select id="f-ser"><option value="">Alle Reihen</option>${seriesNames.map(s=>`<option value="${esc(s)}"${S.series===s?' selected':''}>${esc(s)}</option>`).join('')}</select></div>
+    <div class="fg"><label class="lab" for="f-au">Autor</label><select id="f-au"><option value="">Alle Autoren</option>${authors.map(a=>`<option value="${esc(a)}"${S.author===a?' selected':''}>${esc(a)}</option>`).join('')}</select></div>
+   </div>
    ${(activeN()||S.q)?'<button class="reset" data-reset="1">Filter zurücksetzen</button>':''}</aside>`;
 }
 function tileSt(M,lg){if(!LIBOK)return '';const v=M.filter(p=>p.l===lg&&!p.c);if(!v.length)return '';const r=v.filter(p=>stOf(p)==='read').length,hv=v.filter(have).length;
@@ -539,30 +545,40 @@ function covWatch(){if(location.protocol==='blob:'||!('IntersectionObserver' in 
 function go(v,o){S.view=v;if(o)Object.assign(S,o);S.limit=48;render()}
 
 // ---------- Verlauf: Zurück geht immer genau einen Schritt zurück ----------
-const NAVS=[];let LAST=null,RESTORING=false,RESTORE_Y=0;
+const NAVS=[];let LAST=null,RESTORING=false,RESTORE_Y=0,BK=null;
+const keyOf=()=>S.view==='series'?'series|'+S.ser:S.view==='start'?'start':'list';
 const sigOf=()=>JSON.stringify([S.view,S.ser,S.sl,S.mode,S.q,S.lang,S.genre,S.author,S.series,S.fmt,S.med,S.rd,S.cmp,S.len,S.sort,S.fopen]);
 function navSave(){try{localStorage.setItem('libri:shopnav',JSON.stringify({t:Date.now(),S:Object.assign({},S,{fopen:false}),q:$('#q').value||'',y:window.scrollY,navs:NAVS.filter(e=>e.t==='s')}))}catch(e){}}
 function navSync(){navSave();try{if(parent!==window)parent.postMessage({type:'shop-depth',n:NAVS.length},'*')}catch(e){}}
 function navTrack(){
   const sig=sigOf();
   if(!RESTORING&&LAST&&LAST.sig!==sig){
-    if(S.view==='start'&&!S.q){const keep=NAVS.filter(e=>e.t==='o');NAVS.length=0;NAVS.push(...keep)}
-    else{NAVS.push({t:'s',v:Object.assign({},LAST.v,{y:window.scrollY})});if(NAVS.length>12){const i=NAVS.findIndex(e=>e.t==='s');if(i>=0)NAVS.splice(i,1)}}
+    const nk=keyOf();
+    if(nk==='start'&&!S.q){const keep=NAVS.filter(e=>e.t==='o');NAVS.length=0;NAVS.push(...keep);BK=null}
+    else if(nk!==LAST.key){
+      // Eine neue Ebene (Liste → Reihe, Buch → Reihe …) kommt auf den Stapel. Filter, Sortierung und Suche innerhalb einer Ansicht nicht.
+      // Kommt man zu einer Ansicht zurück, die schon auf dem Stapel liegt, wird alles darüber verworfen.
+      NAVS.push({t:'s',key:LAST.key,book:BK,v:Object.assign({},LAST.v,{y:window.scrollY})});
+      const j=NAVS.map((e,i)=>e.t==='s'&&e.key===nk&&e.book==null?i:-1).filter(i=>i>=0).pop();
+      if(j!==undefined)for(let i=NAVS.length-1;i>=j;i--)if(NAVS[i].t==='s')NAVS.splice(i,1);
+      if(NAVS.filter(e=>e.t==='s').length>8){const i=NAVS.findIndex(e=>e.t==='s');if(i>=0)NAVS.splice(i,1)}
+      BK=null;
+    }
   }
-  LAST={sig,v:{S:Object.assign({},S),q:$('#q').value||''}};
+  LAST={sig,key:keyOf(),v:{S:Object.assign({},S),q:$('#q').value||''}};
   navSync();
 }
 function navBack(){
   // Ist eine Detailansicht, der Warenkorb oder das große Cover offen, schließt Zurück genau diese – egal, was vorher angeklickt wurde.
   if(!$('#zoom').hidden){$('#zoom').hidden=true;const i=NAVS.map(e=>e.t).lastIndexOf('o');if(i>=0)NAVS.splice(i,1);navSync();return}
-  if(!$('#modal').hidden||!$('#drawer').hidden){closeAll();for(let i=NAVS.length-1;i>=0;i--)if(NAVS[i].t==='o')NAVS.splice(i,1);navSync();return}
+  if(!$('#modal').hidden||!$('#drawer').hidden){BK=null;closeAll();for(let i=NAVS.length-1;i>=0;i--)if(NAVS[i].t==='o')NAVS.splice(i,1);navSync();return}
   const e=NAVS.pop();
   if(!e){navSync();return}
   if(e.t==='o'){if(!$('#zoom').hidden)$('#zoom').hidden=true;else closeAll();navSync();return}
   RESTORING=true;sgHide();Object.assign(S,e.v.S);$('#q').value=e.v.q||'';render(true);RESTORING=false;
-  window.scrollTo(0,e.v.y||0);navSync();
+  window.scrollTo(0,e.v.y||0);if(e.book!=null&&P[e.book])openProduct(e.book);navSync();
 }
-function ovSync(){const vis=['#drawer','#modal','#zoom'].filter(s=>!$(s).hidden).length;let c=NAVS.filter(e=>e.t==='o').length;const c0=c;
+function ovSync(){if($('#modal').hidden)BK=null;const vis=['#drawer','#modal','#zoom'].filter(s=>!$(s).hidden).length;let c=NAVS.filter(e=>e.t==='o').length;const c0=c;
   while(c<vis){NAVS.push({t:'o'});c++}
   while(c>vis){NAVS.splice(NAVS.map(e=>e.t).lastIndexOf('o'),1);c--}
   if(c!==c0)navSync()}
@@ -606,7 +622,7 @@ function toShelf(id){const p=P[id];if(!p||HAVE.has(stOf(p)))return;
   try{if(parent!==window)parent.postMessage({type:'shop-order'},'*')}catch(e){}
   openProduct(id,true);render(true)}
 function openProduct(id,keep){
-  const p=P[id];
+  const p=P[id];BK=id;
   const more=isSeries(p)?ordSer(P.filter(x=>x.g===p.g&&x.l===p.l&&x.id!==p.id)):[];
   const sim=similar(p);
   const mt=[p.pub,p.y,p.pg?p.pg+' Seiten':'',p.isbn?'ISBN '+p.isbn:''].filter(Boolean).join(' · ');
@@ -759,8 +775,9 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-add]')){el=t.closest('[data-add]');toggleCart(+el.dataset.add,el.dataset.m);return}
   if(el=t.closest('[data-open]')){openProduct(+el.dataset.open);return}
   if(el=t.closest('[data-rm]')){toggleCart(+el.dataset.rm,el.dataset.m);return}
-  if(t.closest('[data-close]')||t.id==='scrim'){closeAll();return}
+  if(t.closest('[data-close]')||t.id==='scrim'){BK=null;closeAll();return}
   if(t.closest('#cartbtn')){openCart();return}
+  if(t.closest('[data-fmore]')){S.fmore=!S.fmore;render(true);return}
   if(t.closest('[data-fopen]')){S.fopen=!S.fopen;render(true);return}
   if(t.closest('[data-more]')){S.limit+=48;render(true);return}
   if(t.closest('[data-reset]')){Object.assign(S,{med:'',q:'',lang:'',genre:'',author:'',series:'',fmt:'',rd:'',cmp:'',len:''});$('#q').value='';S.limit=48;render(true);return}
@@ -775,13 +792,13 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{
   const id=e.target.id;
-  if(id==='f-sort')S.sort=e.target.value;else if(id==='f-ser'){if(e.target.value){go('series',{ser:e.target.value,sl:S.lang||''});return}S.series=''}else if(id==='f-au')S.author=e.target.value;else return;
+  if(id==='f-sort')S.sort=e.target.value;else if(id==='f-ser'){if(e.target.value){go('series',{ser:e.target.value,sl:S.lang||''});return}S.series=''}else if(id==='f-au')S.author=e.target.value;else if(id==='f-genre')S.genre=e.target.value;else return;
   S.limit=48;render(true);
 });
 let sgT=0;$('#q').addEventListener('input',e=>{const v=e.target.value;clearTimeout(sgT);if(v.trim().length<2){sgHide();if(!v.trim()&&S.q){S.q='';if(S.view==='shop')render(true)}return}sgT=setTimeout(()=>sgShow(v),70)});
 $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commitSearch();e.target.blur()}});
 $('#q').addEventListener('focus',e=>{if(e.target.value.trim().length>=2)sgShow(e.target.value)});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){sgHide();if(!$('#zoom').hidden)$('#zoom').hidden=true;else closeAll()}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){sgHide();if(!$('#zoom').hidden)$('#zoom').hidden=true;else{BK=null;closeAll()}}});
 
 $('#foot').textContent=`${P.length} Titel · ${P.filter(p=>p.eb).length} eBooks · ${P.filter(p=>p.pb).length} gedruckte Bücher · Stand ${BUILT}`;
 render();if(RESTORE_Y)window.scrollTo(0,RESTORE_Y);
