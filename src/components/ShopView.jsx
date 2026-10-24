@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getShopMetaItems, getShopLibraryStatus, flushShopOrders } from '../lib/db'
+import { getShopMetaItems, getShopLibraryStatus, flushShopOrders, hasMaasBook } from '../lib/db'
 import { useBackLayer } from '../lib/backStack'
 
 /* Eine Zurück-Ebene pro Schritt, den der Shop gegangen ist (Reihe geöffnet,
@@ -16,6 +16,8 @@ function ShopStep({ onBack }) {
 export default function ShopView({ onClose }) {
   const frame = useRef(null)
   const [depth, setDepth] = useState(0)
+  const [ready, setReady] = useState(false)
+  const unlockRef = useRef(false)
   const back = () => frame.current?.contentWindow?.postMessage({ type: 'libri-shop-back' }, '*')
 
   useEffect(() => {
@@ -24,7 +26,8 @@ export default function ShopView({ onClose }) {
     async function sendLib(wish) {
       try {
         const lib = await getShopLibraryStatus()
-        send({ type: 'libri-shop-lib', lib, wish: wish || null })
+        const unlock = await hasMaasBook()
+        send({ type: 'libri-shop-lib', lib, wish: wish || null, unlock })
       } catch { /* der Shop funktioniert auch ohne */ }
     }
     async function onMessage(e) {
@@ -47,6 +50,11 @@ export default function ShopView({ onClose }) {
       await flushShopOrders().catch(() => null)
       await sendLib(null)
     }
+    // Versteckte Shop-Einträge: Schalter setzen, bevor der Shop geladen wird.
+    hasMaasBook().then((u) => {
+      unlockRef.current = u
+      try { localStorage.setItem('libri:shopUnlock', u ? '1' : '0') } catch { /* egal */ }
+    }).catch(() => {}).finally(() => setReady(true))
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)
   }, [])
@@ -61,7 +69,7 @@ export default function ShopView({ onClose }) {
         </small>
       </div>
       {Array.from({ length: depth }, (_, i) => <ShopStep key={i} onBack={back} />)}
-      <iframe ref={frame} className="shop-frame" title="Shop" src="./shop/index.html" allow="web-share; clipboard-write" />
+      {ready && <iframe ref={frame} className="shop-frame" title="Shop" src="./shop/index.html" allow="web-share; clipboard-write" />}
     </div>
   )
 }

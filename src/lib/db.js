@@ -1328,6 +1328,14 @@ export async function getShopLibraryStatus() {
   return out
 }
 
+/** Steht ein Buch von Sarah J. Maas in der Bibliothek (nicht nur auf der Wunschliste)?
+    Nur dann zeigt der Shop seine versteckten Einträge. */
+export async function hasMaasBook() {
+  const rx = /\bmaas\b/i
+  return (await db.books.toArray()).some((b) => b.status !== 'wishlist'
+    && ((b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || ''))))
+}
+
 const WISH_QUEUE = 'libri:wishQ'
 
 function splitAuthors(a) {
