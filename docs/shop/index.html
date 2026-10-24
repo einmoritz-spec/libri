@@ -207,8 +207,7 @@ button.auL{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--
 .lnk{border:0;background:none;color:var(--accent);font-weight:700;text-decoration:underline;text-underline-offset:3px;padding:2px 0}
 .lnk[hidden]{display:none}
 .was{color:var(--accent);font-style:normal;font-weight:600}
-.rb{position:absolute;z-index:3;left:5px;bottom:5px;background:rgba(46,33,22,.9);color:#F7EBD4;font:700 8px/1 var(--sans);letter-spacing:.03em;padding:3px 5px;border-radius:4px}
-.rb.read{background:#2F6B3F}.rb.wish{background:#B8741A}.rb.reading{background:#2D5E8A}.rb.dnf{background:#7A4B4B}
+.rb{position:absolute;z-index:3;left:6px;bottom:6px;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--sans);color:#fff;background:#2F6B3F;box-shadow:0 1px 3px rgba(0,0,0,.35)}.rb.wish{background:#D98A1E;font-size:12px;padding-top:1px}.zm{position:relative}
 .tg-s{border-color:#2F6B3F;color:#2F6B3F}.tg-s.wish{border-color:#B8741A;color:#B8741A}
 .libl{color:var(--ink);background:var(--soft);border-radius:10px;padding:8px 10px;margin-top:8px;font-size:12.5px;line-height:1.4}
 .libl.warnl{color:#8A4A10}
@@ -298,7 +297,7 @@ const HAVE=new Set(['read','reading','owned','dnf']);
 const stOf=p=>LIB[p.k2]||'';
 const have=p=>HAVE.has(stOf(p));
 const STL={read:['Gelesen ✓','read'],reading:['Liest du','reading'],owned:['In Libri','owned'],dnf:['Abgebrochen','dnf'],wishlist:['Wunschliste ♡','wish']};
-const rbOf=p=>{const s=STL[stOf(p)];return s?`<span class="rb ${s[1]}">${s[0]}</span>`:''};
+const rbOf=p=>{const t=stOf(p);if(t==='wishlist')return '<span class="rb wish" role="img" aria-label="Auf der Wunschliste">♥</span>';return t&&STL[t]?'<span class="rb have" role="img" aria-label="In deiner Bibliothek">✓</span>':''};
 function nums(L){const a=[...new Set(L.map(p=>parseFloat(String(p.n).replace('–','-'))).filter(v=>!isNaN(v)))].sort((x,y)=>x-y);const out=[];let i=0;
   while(i<a.length){let j=i;while(j+1<a.length&&a[j+1]===a[j]+1&&Number.isInteger(a[j])&&Number.isInteger(a[j+1]))j++;out.push(j>i?a[i]+'–'+a[j]:String(a[i]));i=j+1}return out.join(', ')}
 function libLine(p){
@@ -610,11 +609,10 @@ function openProduct(id,keep){
   const mt=[p.pub,p.y,p.pg?p.pg+' Seiten':'',p.isbn?'ISBN '+p.isbn:''].filter(Boolean).join(' · ');
   $('#mb').dataset.id=id;
   $('#mb').innerHTML=`<button class="x" data-close="1" aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-   <div class="pd"><div class="zm" data-zoom="${p.id}" role="button" aria-label="Cover vergrößern">${cover(p)}</div><div><div class="k">${esc(isSeries(p)?shortSer(p):'Einzelband')}${bandLbl(p)?' · '+esc(bandLbl(p)):''}</div><h3>${esc(title(p))}</h3><div class="au"><button class="auL" data-tf="author" data-v="${esc(p.a)}">${esc(p.a)}</button></div>
-   <div class="tags"><button class="tag" data-tf="lang" data-v="${p.l}">${LANG[p.l]}</button>${[p.ge,...(p.gx||[])].map(g=>`<button class="tag" data-tf="genre" data-v="${esc(g)}">${esc(g)}</button>`).join("")}${ordered(p).length?`<span class="tag tg-o">Schon bestellt</span>`:''}${STL[stOf(p)]?`<span class="tag tg-s ${STL[stOf(p)][1]}">${STL[stOf(p)][0]}</span>`:''}</div></div></div>
+   <div class="pd"><div class="zm" data-zoom="${p.id}" role="button" aria-label="Cover vergrößern">${cover(p)}${rbOf(p)}</div><div><div class="k">${esc(isSeries(p)?shortSer(p):'Einzelband')}${bandLbl(p)?' · '+esc(bandLbl(p)):''}</div><h3>${esc(title(p))}</h3><div class="au"><button class="auL" data-tf="author" data-v="${esc(p.a)}">${esc(p.a)}</button></div>
+   <div class="tags"><button class="tag" data-tf="lang" data-v="${p.l}">${LANG[p.l]}</button>${[p.ge,...(p.gx||[])].map(g=>`<button class="tag" data-tf="genre" data-v="${esc(g)}">${esc(g)}</button>`).join("")}${ordered(p).length?`<span class="tag tg-o">Schon bestellt</span>`:''}</div></div></div>
    <div class="acts">${meds(p).map(m=>{const i=inCart(p,m),both=meds(p).length>1;const sub=m==='e'?(p.f||[]).map(f=>f.toUpperCase()).join(' · '):'Gedruckt';return `<button class="pri ${i?'on':''}" data-add="${p.id}" data-m="${m}"><span>${i?(both?MN[m]+' entfernen':'Aus dem Warenkorb nehmen'):(both?MN[m]:'In den Warenkorb')}</span>${both?`<small>${i?'im Warenkorb':sub||'Datei'}</small>`:''}</button>`}).join('')}${shelfBtn(p)}</div>
    ${readBtns(p)}
-   ${have(p)?`<div class="libl warnl">Dieses Buch hast du schon (${STL[stOf(p)][0].replace(' ✓','')}).</div>`:''}${libLine(p)?`<div class="libl">${esc(libLine(p))}</div>`:''}
    ${isSeries(p)?`<button class="lnk" data-series="${esc(p.g)}" data-lang="${p.l}">Zur ganzen Reihe →</button>`:''}
    ${mt?`<div class="pm">${esc(mt)}</div>`:''}
    ${p.ds?`<p class="ds" id="ds">${esc(p.ds)}</p>${p.ds.length>230?'<button class="mre" data-more-ds="1">Mehr lesen</button>':''}`:''}
