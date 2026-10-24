@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getShopMetaItems } from '../lib/db'
+import { getShopMetaItems, getShopLibraryStatus, flushShopOrders } from '../lib/db'
 import { useBackLayer } from '../lib/backStack'
 
 /* Eine Zurück-Ebene pro Schritt, den der Shop gegangen ist (Reihe geöffnet,
@@ -19,8 +19,21 @@ export default function ShopView({ onClose }) {
   const back = () => frame.current?.contentWindow?.postMessage({ type: 'libri-shop-back' }, '*')
 
   useEffect(() => {
+    const send = (msg) => frame.current?.contentWindow?.postMessage(msg, '*')
+    // Status der Bibliothek an den Shop: gelesen, vorhanden, auf der Wunschliste …
+    async function sendLib(wish) {
+      try {
+        const lib = await getShopLibraryStatus()
+        send({ type: 'libri-shop-lib', lib, wish: wish || null })
+      } catch { /* der Shop funktioniert auch ohne */ }
+    }
     async function onMessage(e) {
       if (e.source !== frame.current?.contentWindow) return
+      if (e.data?.type === 'shop-order') {
+        const r = await flushShopOrders().catch(() => null)
+        await sendLib(r)
+        return
+      }
       if (e.data?.type === 'shop-depth') {
         try { localStorage.setItem('libri:shopOpen', String(Date.now())) } catch { /* egal */ }
         setDepth(Math.max(0, Math.min(20, Number(e.data.n) || 0)))
@@ -31,6 +44,8 @@ export default function ShopView({ onClose }) {
         const items = await getShopMetaItems()
         if (items.length) e.source.postMessage({ type: 'libri-shop-meta', items }, '*')
       } catch { /* der Shop funktioniert auch ohne */ }
+      await flushShopOrders().catch(() => null)
+      await sendLib(null)
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)

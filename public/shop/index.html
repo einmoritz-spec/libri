@@ -548,6 +548,9 @@ function navTrack(){
   navSync();
 }
 function navBack(){
+  // Ist eine Detailansicht, der Warenkorb oder das große Cover offen, schließt Zurück genau diese – egal, was vorher angeklickt wurde.
+  if(!$('#zoom').hidden){$('#zoom').hidden=true;const i=NAVS.map(e=>e.t).lastIndexOf('o');if(i>=0)NAVS.splice(i,1);navSync();return}
+  if(!$('#modal').hidden||!$('#drawer').hidden){closeAll();for(let i=NAVS.length-1;i>=0;i--)if(NAVS[i].t==='o')NAVS.splice(i,1);navSync();return}
   const e=NAVS.pop();
   if(!e){navSync();return}
   if(e.t==='o'){if(!$('#zoom').hidden)$('#zoom').hidden=true;else closeAll();navSync();return}

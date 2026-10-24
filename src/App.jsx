@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, addBook, emptyBook, isAutoBackupDue, exportLibrary, markBackupDone, trimAllCovers } from './lib/db'
+import { db, addBook, emptyBook, flushShopOrders, isAutoBackupDue, exportLibrary, markBackupDone, trimAllCovers } from './lib/db'
 import Library from './components/Library'
 import Scan from './components/Scan'
 // Erst laden, wenn der Tab wirklich geöffnet wird — verkleinert das, was beim
@@ -102,6 +102,19 @@ export default function App() {
       cancelled = true
       clearTimeout(timer)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dbState])
+
+  // Im Shop bestellte Bücher, die noch nicht auf der Wunschliste gelandet sind
+  // (Shop in einem eigenen Tab genutzt, App war zu), jetzt nachtragen.
+  useEffect(() => {
+    if (dbState !== 'ready') return undefined
+    const timer = setTimeout(() => {
+      flushShopOrders().then((r) => {
+        if (r?.added) notify(`${r.added} Shop-${r.added === 1 ? 'Buch' : 'Bücher'} auf der Wunschliste`)
+      }).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dbState])
 

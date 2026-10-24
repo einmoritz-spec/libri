@@ -848,7 +848,7 @@ const shopTitle = (t) => String(t || '').split(/\s[-–:]\s/)[0]
 /** Ergänzt die Bücher des Shops: erst aus der eigenen Bibliothek (gleicher
     Titel und Autor), dann über die Online-Kataloge per Titel und Autor.
     Gefundene ISBN, Cover, Text, Seiten, Verlag und Jahr landen in shopMeta. */
-export async function enrichShopItems({ onProgress, shouldStop, retry = false } = {}) {
+export async function enrichShopItems({ onProgress, shouldStop, retry = false, online = false } = {}) {
   const shop = await loadShop()
   const metas = new Map((await db.shopMeta.toArray()).map((m) => [m.key, m]))
   const books = (await db.books.toArray()).filter((b) => b.status !== 'wishlist')
@@ -883,7 +883,7 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
     }
 
     // 2. Online per Titel und Autor
-    if (need() && (retry || m.tried !== 2) && failStreak < 3 && waits <= 8) {
+    if (online && need() && (retry || m.tried !== 2) && failStreak < 3 && waits <= 8) {
       stats.online++
       try {
         const tAuthor = (h) => !h.authors?.length || h.authors.some((x) => shop.surname(x) === sn)
@@ -942,7 +942,7 @@ export async function enrichShopItems({ onProgress, shouldStop, retry = false } 
     const after = JSON.stringify([m.isbn13, m.description, m.pages, m.publisher, m.year, Boolean(m.coverBlob)])
     if (after !== before || m.tried !== metas.get(key)?.tried) await db.shopMeta.put(m)
     if (after !== before) filled++
-    if (i % 5 === 0) onProgress?.({ done: i, total: items.length, title: 'Shop', filled })
+    if (i % 25 === 0) onProgress?.({ done: i, total: items.length, title: 'Shop', filled })
   }
   return { filled, total: items.length, stats }
 }
@@ -1251,6 +1251,8 @@ export async function readingHistory(book, days = 30) {
   for (const r of rows) perDay.set(r.date, (perDay.get(r.date) || 0) + (r.pages || 0))
 
   const today = new Date()
+  // Immer ein gleitendes Fenster: die letzten `days` Tage. Mit jedem neuen
+  // Tag fällt der älteste weg — nichts wird zurückgesetzt.
   const series = []
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today)
@@ -1259,7 +1261,7 @@ export async function readingHistory(book, days = 30) {
     series.push({ date: key, pages: perDay.get(key) || 0 })
   }
 
-  const activeDays = [...perDay.values()].filter((p) => p > 0)
+  const activeDays = series.map((d) => d.pages).filter((p) => p > 0)
   const perActiveDay = activeDays.length
     ? Math.round(activeDays.reduce((a, b) => a + b, 0) / activeDays.length)
     : 0
@@ -1270,6 +1272,7 @@ export async function readingHistory(book, days = 30) {
   return {
     series,
     perActiveDay,
+    activeDays: activeDays.length,
     left,
     daysLeft,
     totalLogged: [...perDay.values()].reduce((a, b) => a + b, 0),

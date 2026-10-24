@@ -30,7 +30,8 @@ export async function loadShop() {
     if (!byTitle.has(k)) byTitle.set(k, [])
     byTitle.get(k).push(p)
   }
-  cache = { list, byTitle, titleKey, surname }
+  const byKey = new Map(list.map((p) => [shopKey(p), p]))
+  cache = { list, byTitle, byKey, titleKey, surname }
   return cache
 }
 

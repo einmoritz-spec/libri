@@ -94,7 +94,7 @@ export default function ReadingHistory({ book }) {
 
   // Alle anderen Bücher: wie bisher, nur der Verlauf dieses Buchs
   if (!own) return null
-  const active = own.series.filter((d) => d.pages > 0).length
+  const active = own.activeDays ?? own.series.filter((d) => d.pages > 0).length
   if (!active) return null
   return (
     <>
