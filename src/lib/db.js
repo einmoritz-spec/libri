@@ -509,7 +509,10 @@ async function importShop(shop) {
     const { coverData, ...rest } = r
     const have = await db.shopMeta.get(r.key)
     const m = { ...(have || {}), key: r.key }
-    for (const [k, v] of Object.entries(rest)) if (k !== 'key' && v && !m[k]) m[k] = v
+    for (const [k, v] of Object.entries(rest)) {
+      if (k === 'files') { if (Array.isArray(v) && v.length) m.files = v; continue }
+      if (k !== 'key' && v && !m[k]) m[k] = v
+    }
     if (!m.coverBlob && coverData) m.coverBlob = await dataUrlToBlob(coverData)
     await db.shopMeta.put(m)
   }
@@ -959,6 +962,7 @@ export async function getShopMetaItems() {
       pg: m.pages || 0,
       y: m.year || 0,
       pub: m.publisher || '',
+      fl: m.files || [],
       img: m.coverBlob ? await blobToDataUrl(m.coverBlob) : ''
     })
   }

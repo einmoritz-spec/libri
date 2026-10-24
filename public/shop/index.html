@@ -169,6 +169,7 @@ button.auL{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--
 .tg-o{border-color:var(--accent);color:var(--accent)}
 .lnk{border:0;background:none;color:var(--accent);font-weight:700;padding:16px 0 4px;font-size:14px;text-align:left}
 .pd .k{font-size:10.5px}
+.acts a.pri{color:var(--accent-ink);justify-content:center;text-align:center}
 .acts a{text-decoration:none;display:inline-flex;align-items:center;color:var(--ink)}
 .more-h{font:700 17px/1.2 var(--serif);margin:20px 0 8px}
 .done h3{font:700 22px/1.15 var(--serif);margin:0 0 4px;padding-right:34px}
@@ -590,6 +591,9 @@ function similar(p){
     .map(x=>[(x.p===p.p?4:0)+(x.ge===p.ge?1:0)+(x.l===p.l?1:0)+((!isSeries(x)||first.has(x.id))?1.5:0)+Math.random()*.9,x])
     .sort((a,b)=>b[0]-a[0]).slice(0,12).map(v=>v[1]);
 }
+function readBtns(p){let on=false;try{on=localStorage.getItem('libri:readBtnShop')==='1'}catch(e){}
+  if(!on||!p.fl||!p.fl.length)return '';
+  return `<div class="acts reads">${p.fl.map(f=>{const l=f.note||(p.fl.length>1?String(f.ext||'').toUpperCase():'');return `<a class="pri" target="_blank" rel="noopener noreferrer" href="https://drive.google.com/file/d/${esc(f.id)}/view"><span>Lesen${l?' ('+esc(l)+')':''}</span></a>`}).join('')}</div>`}
 function shelfBtn(p){const st=stOf(p),on=HAVE.has(st);
   return `<button class="pri shelf${on?' on':''}" data-shelf="${p.id}"${on?' disabled':''}><span>${on?'Im Regal ✓':'In die Bibliothek'}</span><small>${on?'schon in Libri':st==='wishlist'?'von der Wunschliste ins Regal':'ins Regal legen'}</small></button>`}
 function toShelf(id){const p=P[id];if(!p||HAVE.has(stOf(p)))return;
@@ -607,6 +611,7 @@ function openProduct(id,keep){
    <div class="pd"><div class="zm" data-zoom="${p.id}" role="button" aria-label="Cover vergrößern">${cover(p)}</div><div><div class="k">${esc(isSeries(p)?shortSer(p):'Einzelband')}${bandLbl(p)?' · '+esc(bandLbl(p)):''}</div><h3>${esc(title(p))}</h3><div class="au"><button class="auL" data-tf="author" data-v="${esc(p.a)}">${esc(p.a)}</button></div>
    <div class="tags"><button class="tag" data-tf="lang" data-v="${p.l}">${LANG[p.l]}</button>${[p.ge,...(p.gx||[])].map(g=>`<button class="tag" data-tf="genre" data-v="${esc(g)}">${esc(g)}</button>`).join("")}${ordered(p).length?`<span class="tag tg-o">Schon bestellt</span>`:''}${STL[stOf(p)]?`<span class="tag tg-s ${STL[stOf(p)][1]}">${STL[stOf(p)][0]}</span>`:''}</div></div></div>
    <div class="acts">${meds(p).map(m=>{const i=inCart(p,m),both=meds(p).length>1;const sub=m==='e'?(p.f||[]).map(f=>f.toUpperCase()).join(' · '):'Gedruckt';return `<button class="pri ${i?'on':''}" data-add="${p.id}" data-m="${m}"><span>${i?(both?MN[m]+' entfernen':'Aus dem Warenkorb nehmen'):(both?MN[m]:'In den Warenkorb')}</span>${both?`<small>${i?'im Warenkorb':sub||'Datei'}</small>`:''}</button>`}).join('')}${shelfBtn(p)}</div>
+   ${readBtns(p)}
    ${have(p)?`<div class="libl warnl">Dieses Buch hast du schon (${STL[stOf(p)][0].replace(' ✓','')}).</div>`:''}${libLine(p)?`<div class="libl">${esc(libLine(p))}</div>`:''}
    ${isSeries(p)?`<button class="lnk" data-series="${esc(p.g)}" data-lang="${p.l}">Zur ganzen Reihe →</button>`:''}
    ${mt?`<div class="pm">${esc(mt)}</div>`:''}
@@ -780,7 +785,7 @@ render();if(RESTORE_Y)window.scrollTo(0,RESTORE_Y);
 /* Eingebettet in Libri: ergänzte Angaben (ISBN, Cover, Text …) kommen von dort. */
 window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='libri-shop-meta'||!Array.isArray(d.items))return;
   let n=0;d.items.forEach(r=>{const p=BYK.get(r.key);if(!p)return;
-    [['img','img'],['ds','ds'],['pg','pg'],['y','y'],['pub','pub'],['isbn','isbn']].forEach(([a,b])=>{if(r[a]&&!p[b]){p[b]=r[a];n++}})});
+    [['img','img'],['ds','ds'],['pg','pg'],['y','y'],['pub','pub'],['isbn','isbn']].forEach(([a,b])=>{if(r[a]&&!p[b]){p[b]=r[a];n++}});if(r.fl&&r.fl.length&&!p.fl){p.fl=r.fl;n++}});
   if(n)render(true)});
 window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='libri-shop-lib'||!d.lib)return;LIB=d.lib;LIBOK=true;if(d.wish)showWish(d.wish);render(true)});
 try{if(parent!==window)parent.postMessage({type:'shop-ready'},'*')}catch(e){}

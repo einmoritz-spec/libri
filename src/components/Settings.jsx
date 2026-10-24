@@ -49,6 +49,8 @@ export default function Settings({ notify, onOpenShop }) {
   const [celebrate, setCelebrateState] = useState(
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
+  const [readLib, setReadLibState] = useState(() => localStorage.getItem('libri:readBtnLib') === '1')
+  const [readShop, setReadShopState] = useState(() => localStorage.getItem('libri:readBtnShop') === '1')
   const [kidsTab, setKidsTabState] = useState(
     () => localStorage.getItem('libri:kidsTab') === '1'
   )
@@ -60,6 +62,16 @@ export default function Settings({ notify, onOpenShop }) {
   function setUpNext(on) {
     setUpNextState(on)
     localStorage.setItem('libri:upNext', on ? '1' : '0')
+  }
+
+  function setReadLib(on) {
+    setReadLibState(on)
+    localStorage.setItem('libri:readBtnLib', on ? '1' : '0')
+  }
+
+  function setReadShop(on) {
+    setReadShopState(on)
+    localStorage.setItem('libri:readBtnShop', on ? '1' : '0')
   }
 
   function setKidsTab(on) {
@@ -213,6 +225,12 @@ export default function Settings({ notify, onOpenShop }) {
         </Row>
         <Row label="Bilderbücher-Reiter">
           <OnOff on={kidsTab} set={setKidsTab} />
+        </Row>
+        <Row label="„Lesen“-Knopf in der Bibliothek">
+          <OnOff on={readLib} set={setReadLib} />
+        </Row>
+        <Row label="„Lesen“-Knopf im Shop">
+          <OnOff on={readShop} set={setReadShop} />
         </Row>
       </Section>
 
