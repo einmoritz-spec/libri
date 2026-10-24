@@ -363,6 +363,17 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
         {book.publisher && <span>{book.publisher}</span>}
       </div>
 
+      {book.files?.length > 0 && local.status !== 'wishlist' && (
+        <div className="btn-row" style={{ margin: '6px 0 14px' }}>
+          {book.files.map((f) => (
+            <a key={f.id} className="btn btn-primary" target="_blank" rel="noopener noreferrer"
+              href={`https://drive.google.com/file/d/${f.id}/view`}>
+              Lesen{book.files.length > 1 ? ` (${String(f.ext || '').toUpperCase()})` : ''}
+            </a>
+          ))}
+        </div>
+      )}
+
       {local.status === 'wishlist' && (
         <>
           <h2>Auf der Wunschliste</h2>

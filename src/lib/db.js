@@ -179,6 +179,7 @@ export function emptyBook(overrides = {}) {
     shelfRow: 0,
     shelfIndex: null,
     source: 'manual',
+    files: [], // Dateien in deinem Drive: { id, name, ext } — nur auf dem Gerät, nie im Repo
     addedAt: new Date().toISOString(),
     startedAt: null,
     finishedAt: null,
@@ -532,7 +533,7 @@ async function importShop(shop) {
    eine ältere Sicherung Lesestand und Bewertung zurücksetzen. */
 const IMPORT_OVERWRITE = [
   'title', 'subtitle', 'authors', 'publisher', 'year', 'pages', 'language',
-  'description', 'audioMinutes', 'series', 'subseries', 'subseriesIndex', 'seriesIndex', 'coverUrl', 'source'
+  'description', 'audioMinutes', 'series', 'subseries', 'subseriesIndex', 'seriesIndex', 'coverUrl', 'source', 'files'
 ]
 const IMPORT_FILL_ONLY = [
   'status', 'currentPage', 'rating', 'notes', 'tags', 'startedAt', 'finishedAt',
