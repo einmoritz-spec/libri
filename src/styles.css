@@ -2639,3 +2639,6 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .seg3 button { background: none; border: 0; color: var(--dim); font-size: 14px; padding: 8px 0; border-radius: 999px; transition: background-color .15s var(--ease), color .15s var(--ease); }
 .seg3 button[aria-pressed='true'] { background: var(--lamp); color: var(--night); font-weight: 500; }
 .seg3-hint { display: block; margin-top: 8px; font-size: 12px; color: var(--dim); }
+
+.view-bar, .view-bar.has-kids { flex-wrap: wrap; row-gap: 8px; max-width: 100%; }
+.view-bar .view-toggle-icons { margin-left: auto; }
