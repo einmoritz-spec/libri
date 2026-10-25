@@ -334,7 +334,7 @@ function meta(p){return [isSeries(p)?shortSer(p):'Einzelband',bandLbl(p),LANG[p.
 // ---------- Cover ----------
 function cover(p,sm){
   const [c1,c2]=PAL[p.ci];
-  if(p.img)return `<div class="cv has" style="--c1:${c1};--c2:${c2}"><img src="${p.img}" alt="" loading="lazy"></div>`;
+  if(p.img)return `<div class="cv has" data-pi="${p._i}" style="--c1:${c1};--c2:${c2}"><img src="${p.img}" alt="" loading="lazy"></div>`;
   const num=isSeries(p)&&!p.c&&p.n!=='';
   const mid=num?`<div class="t2${p.n.length>2?' s':''}">${esc(p.n)}</div>`:`<div class="t3">${esc(title(p))}</div>`;
   return `<div class="cv" data-pi="${p._i}" style="--c1:${c1};--c2:${c2}"><div class="t1">${esc(isSeries(p)?shortSer(p):'Einzelband')}</div>${mid}<div class="t4">${esc(p.p)}</div></div>`;
