@@ -2649,3 +2649,6 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .view-bar .view-toggle-icons button { padding: 0 8px; min-height: 32px; }
 .view-bar .view-toggle-icons svg { width: 16px; height: 16px; }
 .view-bar { gap: 6px; }
+/* Statusfilter: alles sichtbar, bei Platzmangel zweite Zeile statt seitlich wischen */
+.chips-row { flex-wrap: wrap; overflow-x: visible; margin: 0 0 12px; padding: 0; row-gap: 6px; gap: 6px; }
+.chips-row .chip { font-size: 13px; padding: 5px 10px; }
