@@ -100,7 +100,8 @@ button{cursor:pointer}
 .ph .cnt{color:var(--muted)}
 .lay{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:900px){.lay{grid-template-columns:210px 1fr;gap:26px}}
-.lay{margin-top:18px}
+.lay{margin-top:14px}
+.frow{display:flex;align-items:center;gap:0;margin-top:12px;flex-wrap:wrap}.frow .cnt{margin-left:auto;font-size:13px;color:var(--muted);padding-left:10px}.frow .nbtn{margin-left:6px}
 .nbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;margin-left:6px}
 .nbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent)}
 .fbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600}
@@ -475,8 +476,8 @@ function shopView(){
     const shown=L.slice(0,S.limit);cnt=`${L.length} ${L.length===1?'Buch':'Bücher'}`;
     body=`${dymH}<div class="grid">${shown.map(p=>card(p)).join('')}</div>${L.length>S.limit?`<button class="more" data-more="1">Mehr laden (${L.length-S.limit})</button>`:''}`;
   }
-  return `<div class="ph"><h1>${esc(ttl)}</h1><span class="cnt">${cnt}</span></div>${toggle}
-   <button class="fbtn" data-fopen="1" aria-expanded="${S.fopen}">Filter${n?' · '+n:''}</button><button class="nbtn" data-newest="1" aria-pressed="${S.sort==='new'}">✦ Neueste zuerst</button>
+  return `<div style="margin-top:14px">${toggle}</div>
+   <div class="frow"><button class="fbtn" data-fopen="1" aria-expanded="${S.fopen}">Filter${n?' · '+n:''}</button><button class="nbtn" data-newest="1" aria-pressed="${S.sort==='new'}">Neueste</button><span class="cnt">${cnt}</span></div>
    <div class="lay">${filterPanel()}<div>${body}</div></div>`;
 }
 function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[1]):g}
