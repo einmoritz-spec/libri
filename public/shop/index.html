@@ -88,7 +88,7 @@ button{cursor:pointer}
 .bdg{position:absolute;z-index:3;left:-4px;top:-9px;background:var(--pill);color:#F7EBD4;font:600 11px/1 var(--sans);padding:5px 8px;border-radius:999px;white-space:nowrap}
 .lg{position:absolute;z-index:3;right:5px;top:5px;background:rgba(0,0,0,.5);color:#F3E6CF;font:700 7px/1 var(--sans);letter-spacing:.08em;padding:3px 4px;border-radius:4px}
 .pc-t{font:600 13.5px/1.2 var(--serif);margin-top:9px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-wrap:balance}.pc>:last-child{margin-top:auto;padding-top:8px}.rail{align-items:stretch}
-.pc-a{color:var(--muted);font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-a{color:var(--muted);font-size:12px;margin-top:2px;line-height:1.25}
 .pc-m{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
 .fm{font:700 9.5px/1 var(--sans);letter-spacing:.06em;color:var(--muted);border:1px solid var(--line2);border-radius:4px;padding:3px 5px}
 .add{margin-top:7px;border:1.5px solid var(--accent);background:transparent;color:var(--accent);border-radius:14px;font-weight:700;font-size:11.5px;line-height:1.15;padding:5px 6px;white-space:normal;text-wrap:balance;text-align:center;min-width:0}
@@ -353,8 +353,8 @@ function statusLine(p){const t=stOf(p);const o=ordered(p).length;
   return s?`<div class="pc-s ${s[1]}">${s[0]}</div>`:''}
 function card(p){
   const bl=bandLbl(p);
-  return `<article class="pc"><button class="pc-img" data-open="${p.id}" aria-label="${esc(title(p))} ansehen">${bl?`<span class="bdg">${esc(bl)}</span>`:''}<span class="lg">${p.l.toUpperCase()}</span>${cover(p)}</button>
-  <div class="pc-t">${esc(title(p))}</div><div class="pc-a">${esc(sur(p.a))}</div>${statusLine(p)}
+  return `<article class="pc"><button class="pc-img" data-open="${p.id}" aria-label="${esc(title(p))} ansehen">${bl?`<span class="bdg">${esc(bl)}</span>`:''}<span class="lg">${p.l.toUpperCase()}</span>${ordered(p).length?'<span class="ob">✓ Bestellt</span>':''}${rbOf(p)}${cover(p)}</button>
+  <div class="pc-t">${esc(title(p))}</div><div class="pc-a">${esc(p.a)}</div>
   ${addBtns(p)}</article>`;
 }
 
