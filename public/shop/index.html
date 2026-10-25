@@ -100,6 +100,7 @@ button{cursor:pointer}
 .ph .cnt{color:var(--muted)}
 .lay{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:900px){.lay{grid-template-columns:210px 1fr;gap:26px}}
+.lay{margin-top:18px}
 .nbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;margin-left:6px}
 .nbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent)}
 .fbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600}
@@ -426,10 +427,10 @@ function filterPanel(){
   const opt=(arr,cur,fn,key)=>arr.map(([v,t,c])=>`<button class="op" data-${key}="${esc(v)}" aria-pressed="${cur===v}">${esc(t)}${c!=null?`<small>${c}</small>`:''}</button>`).join('');
   const nm=(S.med?1:0)+(S.fmt?1:0)+(S.cmp?1:0)+(S.len?1:0)+(S.series?1:0)+(S.author?1:0);
   return `<aside class="fp${S.fopen?'':' closed'}" id="fp" aria-label="Filter">
+   <div class="fg"><label class="lab" for="f-sort">Sortierung</label><select id="f-sort">${[['rel',S.q?'Beste Treffer':'Reihe & Band'],['az','Titel A–Z'],['author','Autor A–Z'],['new','Neu hinzugefügt'],['len','Größte Reihe zuerst']].map(([v,t])=>`<option value="${v}"${S.sort===v?' selected':''}>${t}</option>`).join('')}</select></div>
+   <div class="fg"><label class="lab" for="f-genre">Genre</label><select id="f-genre"><option value="">Alle Genres</option>${GEN.filter(g=>genC[g]).map(g=>`<option value="${esc(g)}"${S.genre===g?' selected':''}>${esc(g)} (${genC[g]})</option>`).join('')}</select></div>
    <div class="fg"><span class="lab">Sprache</span><div class="opts">${opt([['','Alle'],['de','Deutsch'],['en','Englisch']],S.lang,0,'lang')}</div></div>
    ${LIBOK?`<div class="fg"><span class="lab">Meine Bibliothek</span><div class="opts">${opt([['','Alle'],['new','Neu für mich'],['unread','Ungelesen'],['read','Gelesen'],['wish','Wunschliste']],S.rd,0,'rd')}</div></div>`:''}
-   <div class="fg"><label class="lab" for="f-genre">Genre</label><select id="f-genre"><option value="">Alle Genres</option>${GEN.filter(g=>genC[g]).map(g=>`<option value="${esc(g)}"${S.genre===g?' selected':''}>${esc(g)} (${genC[g]})</option>`).join('')}</select></div>
-   <div class="fg"><label class="lab" for="f-sort">Sortierung</label><select id="f-sort">${[['rel',S.q?'Beste Treffer':'Reihe & Band'],['az','Titel A–Z'],['author','Autor A–Z'],['new','Neu hinzugefügt'],['len','Größte Reihe zuerst']].map(([v,t])=>`<option value="${v}"${S.sort===v?' selected':''}>${t}</option>`).join('')}</select></div>
    <button class="fmore" data-fmore="1" aria-expanded="${!!S.fmore}">${S.fmore?'Weniger Filter ▴':'Mehr Filter'+(nm?' · '+nm:'')+' ▾'}</button>
    <div class="fextra"${S.fmore?'':' hidden'}>
     <div class="fg"><span class="lab">Medium</span><div class="opts">${opt([['','Alle'],['e','eBook'],['b','Buch']],S.med,0,'med')}</div></div>
