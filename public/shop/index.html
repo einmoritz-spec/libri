@@ -342,7 +342,7 @@ function cover(p,sm){
 function inCart(p,m){return cart.has(kk(p,m))}
 function ordered(p){return meds(p).filter(m=>ORD.has(kk(p,m)))}
 function addBtns(p){const ms=meds(p);
-  if(ms.length===1){const m=ms[0],i=inCart(p,m);return `<button class="add${i?' in':''}" data-add="${p.id}" data-m="${m}">${i?'Im Warenkorb ✓':'In den Warenkorb'}</button>`}
+  if(ms.length===1){const m=ms[0],i=inCart(p,m);return `<button class="add${i?' in':''}" data-add="${p.id}" data-m="${m}">${i?(m==='b'?'Buch ✓':'Im Warenkorb ✓'):(m==='b'?'Buch':'In den Warenkorb')}</button>`}
   return `<div class="add2">${ms.map(m=>{const i=inCart(p,m);return `<button class="add${i?' in':''}" data-add="${p.id}" data-m="${m}">${MN[m]}${i?' ✓':''}</button>`}).join('')}</div>`}
 function card(p){
   const bl=bandLbl(p);
@@ -675,7 +675,7 @@ try{const fresh=t=>t>0&&Date.now()-t<30*60*1000;const sv=JSON.parse(localStorage
 // ---------- Warenkorb ----------
 function refreshCartUI(){
   const n=cart.size;const bd=$('#bd');bd.textContent=n;bd.hidden=!n;
-  document.querySelectorAll('[data-add]').forEach(b=>{const p=P[+b.dataset.add],m=b.dataset.m;const i=inCart(p,m);b.classList.toggle('in',i);if(b.classList.contains('add')){const both=meds(p).length>1;b.textContent=both?MN[m]+(i?' ✓':''):(i?'Im Warenkorb ✓':'In den Warenkorb')}});
+  document.querySelectorAll('[data-add]').forEach(b=>{const p=P[+b.dataset.add],m=b.dataset.m;const i=inCart(p,m);b.classList.toggle('in',i);if(b.classList.contains('add')){const both=meds(p).length>1;b.textContent=both?MN[m]+(i?' ✓':''):m==='b'?'Buch'+(i?' ✓':''):(i?'Im Warenkorb ✓':'In den Warenkorb')}});
 }
 function toggleCart(id,m){const p=P[id];const k=kk(p,m);cart.has(k)?cart.delete(k):cart.add(k);saveCart();refreshCartUI();if(!$('#drawer').hidden)drawCart();const mb=$('#mb');if(!$('#modal').hidden&&mb.dataset.id==id)openProduct(id,true)}
 function drawCart(){
