@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadRuntimes } from '../lib/audio'
-import { exportLibrary, importLibrary, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
+import { exportLibrary, importLibrary, importLinks, autoBackupBeforeImport, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -176,11 +176,23 @@ export default function Settings({ notify, onOpenShop }) {
   async function doImport(file) {
     try {
       const { data: payload, repaired } = parseBackupText(await file.text())
+      // Erst die aktuelle Bibliothek als Datei sichern — dann erst einlesen.
+      let saved = false
+      try { saved = await autoBackupBeforeImport() } catch {
+        notify('Die Sicherung vor dem Einlesen ist fehlgeschlagen – es wurde nichts eingelesen.')
+        return
+      }
+      if (payload?.format === 'libri-links') {
+        const { linked, missing, shopLinked } = await importLinks(payload)
+        notify(`${shopLinked} Shop-Verknüpfungen, ${linked} Bücher verknüpft${missing ? `, ${missing} nicht in deiner Bibliothek` : ''}${saved ? ' · vorher gesichert' : ''}`)
+        return
+      }
       const { added, updated, skipped } = await importLibrary(payload, { replace })
       notify(
         `${added} neu` +
         `${updated ? `, ${updated} aktualisiert` : ''}` +
         `${skipped ? `, ${skipped} unverändert` : ''}` +
+        (saved ? ' · vorher gesichert' : '') +
         (repaired ? ' — beschädigte Zeichen in der Datei wurden übergangen' : '')
       )
     } catch (e) {

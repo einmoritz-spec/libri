@@ -578,6 +578,47 @@ async function diffForImport(existing, incoming, coverData) {
   return changes
 }
 
+/** Nur Drive-Verknüpfungen einlesen („libri-links“): legt keine Bücher an, ändert keinen Status
+    und bringt keine Warenkorb-/Bestellangaben mit. Bücher werden nur ergänzt, wenn es sie schon gibt. */
+export async function importLinks(payload) {
+  let linked = 0
+  let missing = 0
+  for (const raw of payload.books || []) {
+    if (!Array.isArray(raw.files) || !raw.files.length) continue
+    const existing = raw.isbn13
+      ? await findByIsbn(raw.isbn13)
+      : await findByTitleAuthor(raw.title, raw.authors?.[0])
+    if (!existing) { missing++; continue }
+    await updateBook(existing.id, { files: raw.files })
+    linked++
+  }
+  let shopLinked = 0
+  for (const r of payload.shop?.meta || []) {
+    if (!r.key || !Array.isArray(r.files) || !r.files.length) continue
+    const have = await db.shopMeta.get(r.key)
+    await db.shopMeta.put({ ...(have || {}), key: r.key, files: r.files })
+    shopLinked++
+  }
+  return { linked, missing, shopLinked }
+}
+
+/** Sicherung der aktuellen Bibliothek als Datei, bevor etwas eingelesen wird. Leere Bibliothek: nichts zu sichern. */
+export async function autoBackupBeforeImport() {
+  const n = (await db.books.count()) + (await db.shopMeta.count())
+  if (!n) return false
+  const data = await exportLibrary()
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const d = new Date()
+  const pad = (x) => String(x).padStart(2, '0')
+  a.href = url
+  a.download = `libri-vor-import-${d.toISOString().slice(0, 10)}-${pad(d.getHours())}${pad(d.getMinutes())}.json`
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+  return true
+}
+
 export async function importLibrary(payload, { replace = false } = {}) {
   if (!payload || payload.format !== 'libri-backup') {
     throw new Error('Das ist keine Libri-Sicherung.')
