@@ -50,6 +50,8 @@ function Spine({ book, mode, lifted, dragged, ...handlers }) {
   if (mode === 'cover' && src) background = `url("${src}") left top / auto 100% no-repeat, ${background}`
   else if (mode === 'gradient' && grad) background = gradientCss(grad)
 
+  // Im Cover-Modus trägt das Bild den Titel schon — Text nur, wenn kein Cover da ist.
+  const bare = mode === 'cover' && Boolean(src)
   const w = spineWidth(book)
   const h = spineHeight(book)
   return (
@@ -59,8 +61,8 @@ function Spine({ book, mode, lifted, dragged, ...handlers }) {
       style={{ width: w, height: h, background }}
       {...handlers}
     >
-      {book.seriesIndex ? <span className="sv-no">{book.seriesIndex}</span> : null}
-      <span className="sv-t">{book.title}</span>
+      {!bare && book.seriesIndex ? <span className="sv-no">{book.seriesIndex}</span> : null}
+      {!bare && <span className="sv-t">{book.title}</span>}
       {book.files?.length > 0 && <EbookIcon />}
       {book.status === 'read' && <CheckIcon />}
     </div>
