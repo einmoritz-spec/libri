@@ -29,18 +29,18 @@ export function getShelfMode() {
 /** Dicke wächst gleichmäßig mit der Seitenzahl: 100 S. ≈ 14 px, 1200 S. ≈ 58 px. */
 export function spineWidth(book) {
   const pages = book.pages || book.ebookPages || 350
-  return Math.round(Math.min(58, Math.max(14, 10 + pages * 0.04)))
+  return Math.round(Math.min(44, Math.max(12, (10 + pages * 0.04) * 0.74)))
 }
 
 export const BINDINGS = [['hard', 'Hardcover'], ['soft', 'Taschenbuch'], ['small', 'Kleinformat']]
-const BASE_H = { hard: 214, soft: 192, small: 172 }
+const BASE_H = { hard: 158, soft: 142, small: 127 }
 
 /** Höhe: Einband bestimmt die Grundhöhe, der Autor verschiebt sie leicht —
     so sind alle Bände einer Reihe gleich hoch, verschiedene Autoren aber nicht. */
 export function spineHeight(book) {
   const b = BASE_H[book.binding] ? book.binding : 'soft'
   const author = (book.authors?.[0] || book.series || book.title || '').split(' ').pop().toLowerCase()
-  const off = (hashSeed(author) % 13) - 6
+  const off = (hashSeed(author) % 9) - 4
   return BASE_H[b] + off
 }
 

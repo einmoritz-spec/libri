@@ -62,7 +62,7 @@ function Spine({ book, mode, lifted, dragged, ...handlers }) {
       {...handlers}
     >
       {!bare && book.seriesIndex ? <span className="sv-no">{book.seriesIndex}</span> : null}
-      {!bare && <span className="sv-t">{book.title}</span>}
+      {!bare && <span className="sv-t"><span>{book.title}</span></span>}
       {!bare && book.files?.length > 0 && <EbookIcon />}
       {!bare && book.status === 'read' && <CheckIcon />}
     </div>

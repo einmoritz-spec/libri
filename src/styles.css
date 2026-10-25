@@ -2580,10 +2580,10 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 }
 .sv-shelf { margin-bottom: 4px; }
 .sv-row {
-  display: flex; align-items: flex-end; gap: 3px; padding: 16px 4px 0; min-height: 210px;
+  display: flex; align-items: flex-end; gap: 2px; padding: 12px 4px 0; min-height: 160px;
 }
 .sv-board {
-  height: 14px; margin: 0 -4px 8px; border-radius: 2px;
+  height: 10px; margin: 0 -4px 6px; border-radius: 2px;
   background-image:
     repeating-linear-gradient(90deg, rgba(0,0,0,.07) 0 2px, transparent 2px 9px),
     linear-gradient(#a9784a, #8a5c36 55%, #6e4727);
@@ -2607,18 +2607,19 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
   text-shadow: -1px 0 rgba(0,0,0,.75), 1px 0 rgba(0,0,0,.75), 0 -1px rgba(0,0,0,.75), 0 1px rgba(0,0,0,.75), 0 0 3px rgba(0,0,0,.5);
 }
 .sv-t {
-  position: absolute; left: 0; right: 0; top: 30px; bottom: 34px;
+  position: absolute; left: 0; right: 0; top: 22px; bottom: 26px;
   display: flex; align-items: center; justify-content: center;
   writing-mode: vertical-rl; transform: rotate(180deg);
-  font: 600 12px/1.1 var(--serif); text-align: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 1;
+  font: 600 10px/1.1 var(--serif); text-align: center;
+  z-index: 1;
 }
-.sv-no { position: absolute; top: 7px; left: 0; right: 0; text-align: center; font: 700 10px var(--sans); z-index: 1; }
-.sv-ck, .sv-eb { position: absolute; left: 50%; width: 12px; height: 12px; margin-left: -6px; z-index: 1;
+.sv-t > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-height: 100%; }
+.sv-no { position: absolute; top: 5px; left: 0; right: 0; text-align: center; font: 700 8.5px var(--sans); z-index: 1; }
+.sv-ck, .sv-eb { position: absolute; left: 50%; width: 9px; height: 9px; margin-left: -4.5px; z-index: 1;
   filter: drop-shadow(0 0 3px rgba(255,255,255,.45)); }
-.sv-ck { bottom: 7px; }
-.sv-eb { bottom: 22px; }
-.sv-gap { flex: none; height: 150px; border-radius: 3px; background: rgba(230,165,62,.18); outline: 1px dashed var(--lamp); }
+.sv-ck { bottom: 5px; }
+.sv-eb { bottom: 16px; }
+.sv-gap { flex: none; height: 110px; border-radius: 3px; background: rgba(230,165,62,.18); outline: 1px dashed var(--lamp); }
 .sv-ghost { position: fixed; z-index: 90; pointer-events: none; transform: translate(-50%, -60%) scale(1.08); opacity: .95; filter: drop-shadow(0 8px 10px rgba(0,0,0,.5)); }
 .sv-peek {
   position: fixed; left: 12px; right: 12px; bottom: calc(var(--nav-h) + 10px); z-index: 40;
