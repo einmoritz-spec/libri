@@ -374,9 +374,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
     a.localeCompare(b, 'de')
   )
 
-  const hasMoreFilters = seriesNames.length > 0 || subNames.length > 0 || tags.length > 0 || languages.length > 1
+  const hasMoreFilters = counts.dnf > 0 || status === 'dnf' || seriesNames.length > 0 || subNames.length > 0 || tags.length > 0 || languages.length > 1
   const activeCount =
-    (series !== 'all' ? 1 : 0) + (sub !== 'all' ? 1 : 0) + (lang !== 'all' ? 1 : 0) + (tag !== 'all' ? 1 : 0)
+    (status === 'dnf' ? 1 : 0) + (series !== 'all' ? 1 : 0) + (sub !== 'all' ? 1 : 0) + (lang !== 'all' ? 1 : 0) + (tag !== 'all' ? 1 : 0)
 
   // Ist genau eine Reihe gewählt, die Unterreihen hat, und keine davon:
   // dann in Gruppen je Unterreihe zeigen (Gruppen nach dem ersten Band geordnet).
@@ -513,7 +513,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
 
           {series === 'all' && (
           <div className="filters-wrap chips-row">
-            {STATUS_ORDER.filter((s) => counts[s]).map((s) => (
+            {STATUS_ORDER.filter((s) => counts[s] && s !== 'dnf').map((s) => (
               <button key={s} className="chip" aria-pressed={status === s}
                 onClick={() => setStatus(status === s ? 'all' : s)}>
                 {STATUS[s]} {counts[s]}
@@ -537,6 +537,11 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
               onSort={setSort}
               groups={[
                 {
+                  key: 'status', label: 'Status', value: status === 'dnf' ? 'dnf' : 'all',
+                  options: counts.dnf > 0 || status === 'dnf' ? [{ value: 'dnf', label: `${STATUS.dnf} ${counts.dnf || 0}` }] : [],
+                  onChange: (v) => setStatus(v === 'dnf' ? 'dnf' : 'all')
+                },
+                {
                   key: 'series', label: 'Reihe', value: series,
                   options: seriesNames.map((n) => ({ value: n, label: n })),
                   onChange: (v) => { setSeries(v); if (v !== 'all') setSort('series') }
@@ -559,7 +564,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
               ]}
               activeCount={activeCount}
               resultCount={shown.length}
-              onReset={() => { setSeries('all'); setSub('all'); setLang('all'); setTag('all') }}
+              onReset={() => { if (status === 'dnf') setStatus('all'); setSeries('all'); setSub('all'); setLang('all'); setTag('all') }}
               onClose={() => setShowFilters(false)}
             />
           )}
