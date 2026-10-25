@@ -10,6 +10,8 @@ import { languageName } from '../lib/metadata'
 import { EmptyBookIcon } from './ui'
 import { BookCard } from './BookCard'
 import Home, { WishShelves } from './Home'
+import ShelfView from './ShelfView'
+import { getShelfMode } from '../lib/shelf'
 
 /* Zeigt nach ein paar Sekunden einen Ausweg an, falls der Ladezustand hängt.
    Ein Ladekreis ohne Ende ist immer ein Fehler — spätestens hier bekommt man
@@ -142,6 +144,13 @@ function GridIcon() {
     </svg>
   )
 }
+function ShelfIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" aria-hidden="true">
+      <path d="M5 4v13M9 7v10M13 5v12M17.5 8.5l3 8.2M3 20h18" />
+    </svg>
+  )
+}
 function ListIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
@@ -227,6 +236,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
   const hold = useCallback((book) => toggleSelect(book.id), [toggleSelect])
 
   const [view, setView] = useState(() => localStorage.getItem('libri:libview') || 'home')
+  const shelfMode = getShelfMode()
   const kidsTabEnabled = localStorage.getItem('libri:kidsTab') === '1'
   useEffect(() => {
     if (!kidsTabEnabled && view === 'kids') setView('home')
@@ -459,6 +469,10 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
               onClick={() => setDensity('grid')}><GridIcon /></button>
             <button aria-pressed={density === 'list'} aria-label="Liste" title="Liste"
               onClick={() => setDensity('list')}><ListIcon /></button>
+            {shelfMode !== 'off' && (
+              <button aria-pressed={density === 'shelf'} aria-label="Regal" title="Regal"
+                onClick={() => setDensity('shelf')}><ShelfIcon /></button>
+            )}
           </div>
         )}
       </div>
@@ -552,6 +566,9 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
 
           {shown.length === 0 ? (
             <div className="empty"><EmptyBookIcon /><p>Dazu passt nichts im Regal.</p></div>
+          ) : density === 'shelf' && shelfMode !== 'off' ? (
+            <ShelfView all={ownedBooks} visible={shown} mode={shelfMode} onOpen={open}
+              locked={shown.length !== ownedBooks.length} />
           ) : density === 'list' ? (
             <div className="book-list">
               {letterList.map((item) =>

@@ -57,6 +57,12 @@ export default function Settings({ notify, onOpenShop }) {
     () => localStorage.getItem('libri:kidsTab') === '1'
   )
 
+  const [shelfMode, setShelfModeState] = useState(() => localStorage.getItem('libri:shelfMode') || 'off')
+  function setShelfMode(m) {
+    setShelfModeState(m)
+    localStorage.setItem('libri:shelfMode', m)
+  }
+
   const [upNext, setUpNextState] = useState(
     () => localStorage.getItem('libri:upNext') === '1'
   )
@@ -238,6 +244,13 @@ export default function Settings({ notify, onOpenShop }) {
         </Row>
         <Row label="„Als Nächstes dran“ auf Start">
           <OnOff on={upNext} set={setUpNext} />
+        </Row>
+        <Row label="Regal-Ansicht">
+          <div className="view-toggle" role="group" aria-label="Regal-Ansicht">
+            {[['off', 'Aus'], ['gradient', 'Verlauf'], ['cover', 'Cover']].map(([k, l]) => (
+              <button key={k} aria-pressed={shelfMode === k} onClick={() => setShelfMode(k)}>{l}</button>
+            ))}
+          </div>
         </Row>
         <Row label="Bilderbücher-Reiter">
           <OnOff on={kidsTab} set={setKidsTab} />

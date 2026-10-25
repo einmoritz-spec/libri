@@ -256,6 +256,15 @@ export default function BookForm({ draft, title, submitLabel, onSave, onCancel, 
       </div>
 
       <div className="field">
+        <label htmlFor="f-binding">Einband (Höhe im Regal)</label>
+        <select id="f-binding" value={form.binding || ''} onChange={set('binding')}>
+          <option value="">Taschenbuch (Standard)</option>
+          <option value="hard">Hardcover</option>
+          <option value="small">Kleinformat</option>
+        </select>
+      </div>
+
+      <div className="field">
         <label htmlFor="f-pub">Verlag</label>
         <input id="f-pub" value={form.publisher || ''} onChange={set('publisher')} />
       </div>

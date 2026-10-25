@@ -540,7 +540,7 @@ const IMPORT_OVERWRITE = [
 ]
 const IMPORT_FILL_ONLY = [
   'status', 'currentPage', 'rating', 'notes', 'tags', 'startedAt', 'finishedAt',
-  'format', 'ebookPages', 'reads', 'readLanguage', 'addedAt', 'datesConfirmed', 'readBefore', 'shelfRow', 'shelfIndex', 'spineColor'
+  'format', 'ebookPages', 'reads', 'readLanguage', 'addedAt', 'datesConfirmed', 'readBefore', 'shelfRow', 'shelfIndex', 'spineColor', 'shelfPos', 'binding'
 ]
 
 function hasValue(v) {

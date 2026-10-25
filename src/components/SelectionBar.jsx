@@ -4,6 +4,7 @@ import {
   STATUS, bulkSetStatus, bulkSetAuthors, bulkSetSeries, bulkSetSubseries, bulkTags,
   bulkSetLanguage, bulkSetFormat, deleteBooks, backfillCovers
 } from '../lib/db'
+import { BINDINGS, bulkSetBinding } from '../lib/shelf'
 
 /* Leiste oben, solange Bücher ausgewählt sind, und das Aktionsmenü dazu.
    `books` sind die ausgewählten Bücher in der Reihenfolge, wie sie gerade
@@ -78,6 +79,7 @@ export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone
         <Row label="Als Bilderbuch markieren" onClick={() => run(() => bulkTags(ids, 'Bilderbuch'), `${n} ${word} als Bilderbuch markiert`)} />
         <Row label="Sprache setzen …" onClick={() => go('lang')} />
         <Row label="Format setzen …" sub="Buch, eBook oder Hörbuch" onClick={() => go('format')} />
+        <Row label="Einband setzen …" sub="Höhe im Regal: Hardcover, Taschenbuch, Kleinformat" onClick={() => go('binding')} />
         <Row label="Fehlende Angaben ergänzen" sub="Cover, Seiten, Verlag, Beschreibung"
           onClick={async () => {
             setBusy(true)
@@ -169,6 +171,10 @@ export function ActionSheet({ books, allTags, allSubseries = [], onClose, onDone
   } else if (step === 'lang') {
     body = LANGS.map(([code, label]) => (
       <Row key={code} label={label} onClick={() => run(() => bulkSetLanguage(ids, code), `Sprache: ${label}`)} />
+    ))
+  } else if (step === 'binding') {
+    body = [...BINDINGS, ['', 'Zurücksetzen']].map(([code, label]) => (
+      <Row key={code || 'none'} label={label} onClick={() => run(() => bulkSetBinding(ids, code), `${n} ${word}: ${label}`)} />
     ))
   } else if (step === 'format') {
     body = [['print', 'Buch'], ['ebook', 'eBook'], ['audio', 'Hörbuch']].map(([code, label]) => (

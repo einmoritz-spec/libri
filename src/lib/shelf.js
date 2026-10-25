@@ -1,6 +1,7 @@
 import { db } from './db'
 
-/** Einfacher, stabiler Hash — dieselbe Eingabe ergibt immer denselben Wert. */
+/* Regal-Ansicht: Reihenfolge, Maße und Farbverlauf der Rücken. */
+
 function hashSeed(str) {
   let h = 0
   const s = String(str || '')
@@ -11,80 +12,195 @@ function hashSeed(str) {
   return Math.abs(h)
 }
 
-/** Fallback-Farbe, wenn weder Cover noch daraus berechnete Farbe vorliegt —
-    aus dem Titel abgeleitet, damit dasselbe Buch immer dieselbe Farbe hat. */
+/** Fallback-Farbe ohne Cover — aus dem Titel abgeleitet, damit sie stabil bleibt. */
 export function colorFromText(str) {
   const hue = hashSeed(str) % 360
   return `hsl(${hue} 38% 33%)`
 }
 
-const MIN_W = 17
-const MAX_W = 46
-const MIN_H = 148
-const MAX_H = 192
+export const SHELF_MODES = ['off', 'gradient', 'cover']
+export function getShelfMode() {
+  const m = localStorage.getItem('libri:shelfMode')
+  return SHELF_MODES.includes(m) ? m : 'off'
+}
 
-/** Dicke aus der Seitenzahl — ohne Angabe ein plausibler Mittelwert. */
+/* ── Maße ── */
+
+/** Dicke wächst gleichmäßig mit der Seitenzahl: 100 S. ≈ 14 px, 1200 S. ≈ 58 px. */
 export function spineWidth(book) {
-  const pages = book.pages || 260
-  return Math.round(Math.min(MAX_W, Math.max(MIN_W, 16 + pages / 16)))
+  const pages = book.pages || book.ebookPages || 350
+  return Math.round(Math.min(58, Math.max(14, 10 + pages * 0.04)))
 }
 
-/** Höhe gibt es in keiner Buchdatenbank — leicht aus dem Titel gestreut,
-    damit das Regal nicht wie eine Reihe identischer Klötze aussieht. */
+export const BINDINGS = [['hard', 'Hardcover'], ['soft', 'Taschenbuch'], ['small', 'Kleinformat']]
+const BASE_H = { hard: 214, soft: 192, small: 172 }
+
+/** Höhe: Einband bestimmt die Grundhöhe, der Autor verschiebt sie leicht —
+    so sind alle Bände einer Reihe gleich hoch, verschiedene Autoren aber nicht. */
 export function spineHeight(book) {
-  const spread = hashSeed(book.isbn13 || book.title) % (MAX_H - MIN_H)
-  return MIN_H + spread
+  const b = BASE_H[book.binding] ? book.binding : 'soft'
+  const author = (book.authors?.[0] || book.series || book.title || '').split(' ').pop().toLowerCase()
+  const off = (hashSeed(author) % 13) - 6
+  return BASE_H[b] + off
 }
 
-/** Bücher nach Regalbrett gruppiert, jedes Brett nach Position sortiert.
-    Am Ende steht immer ein leeres Brett, auf das sich ein neues ablegen lässt. */
-export function groupByShelf(books) {
-  const rows = new Map()
-  const sorted = [...books].sort((a, b) => {
-    const ai = a.shelfIndex ?? Infinity
-    const bi = b.shelfIndex ?? Infinity
-    if (ai !== bi) return ai - bi
-    return (a.addedAt || '').localeCompare(b.addedAt || '')
+/* ── Reihenfolge ── */
+
+function surname(b) {
+  return (b.authors?.[0] || 'zzz').split(' ').pop().toLowerCase()
+}
+
+/** Automatische Grundordnung: Reihen alphabetisch, darin nach Band, Einzelbände am Ende. */
+export function autoOrder(books) {
+  return [...books].sort((a, b) => {
+    const as = a.series || ''
+    const bs = b.series || ''
+    if (as && !bs) return -1
+    if (!as && bs) return 1
+    if (as !== bs) return as.localeCompare(bs, 'de')
+    if (as) {
+      return (a.seriesIndex ?? 9999) - (b.seriesIndex ?? 9999) || a.title.localeCompare(b.title, 'de')
+    }
+    return surname(a).localeCompare(surname(b), 'de') || a.title.localeCompare(b.title, 'de')
   })
-  for (const b of sorted) {
-    const row = b.shelfRow || 0
-    if (!rows.has(row)) rows.set(row, [])
-    rows.get(row).push(b)
+}
+
+/** Eigene Reihenfolge (shelfPos) mit automatischer Einsortierung neuer Bücher. */
+export function orderBooks(books) {
+  const placed = books.filter((b) => Number.isFinite(b.shelfPos)).sort((a, b) => a.shelfPos - b.shelfPos)
+  const rest = autoOrder(books.filter((b) => !Number.isFinite(b.shelfPos)))
+  if (!placed.length) return rest
+  const out = [...placed]
+  for (const b of rest) {
+    let at = out.length
+    if (b.series) {
+      for (let i = out.length - 1; i >= 0; i--) {
+        if (out[i].series === b.series) { at = i + 1; break }
+      }
+    }
+    out.splice(at, 0, b)
   }
-  const maxRow = rows.size ? Math.max(...rows.keys()) : -1
-  if (!rows.has(maxRow + 1)) rows.set(maxRow + 1, [])
-  return [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([row, list]) => ({ row, books: list }))
+  return out
 }
 
-/** Verschiebt ein Buch an eine neue Position und nummeriert beide betroffenen
-    Bretter danach sauber neu durch — alles in einer Transaktion. */
-export async function moveBook(bookId, targetRow, targetIndex, rowsSnapshot) {
+/** Teilt die Bücher je nach Breite auf Bretter auf. */
+export function packRows(items, width, gap = 3) {
+  const rows = []
+  let cur = []
+  let w = 0
+  for (const it of items) {
+    const iw = it.gap ? it.w : spineWidth(it)
+    if (cur.length && w + iw + gap > width) {
+      rows.push(cur)
+      cur = []
+      w = 0
+    }
+    cur.push(it)
+    w += iw + gap
+  }
+  if (cur.length) rows.push(cur)
+  return rows
+}
+
+/** Speichert die komplette Reihenfolge — eine Transaktion, nur geänderte Bücher. */
+export async function saveOrder(list) {
   await db.transaction('rw', db.books, async () => {
-    const working = rowsSnapshot.map((r) => ({ row: r.row, books: [...r.books] }))
-    let moving = null
-    for (const r of working) {
-      const idx = r.books.findIndex((b) => b.id === bookId)
-      if (idx !== -1) {
-        moving = r.books.splice(idx, 1)[0]
-        break
-      }
-    }
-    if (!moving) return
-
-    let target = working.find((r) => r.row === targetRow)
-    if (!target) {
-      target = { row: targetRow, books: [] }
-      working.push(target)
-    }
-    target.books.splice(Math.min(targetIndex, target.books.length), 0, moving)
-
-    for (const r of working) {
-      for (let i = 0; i < r.books.length; i++) {
-        const b = r.books[i]
-        if (b.shelfRow !== r.row || b.shelfIndex !== i) {
-          await db.books.update(b.id, { shelfRow: r.row, shelfIndex: i })
-        }
-      }
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].shelfPos !== i) await db.books.update(list[i].id, { shelfPos: i })
     }
   })
+}
+
+export async function resetOrder(books) {
+  await db.transaction('rw', db.books, async () => {
+    for (const b of books) {
+      if (b.shelfPos !== undefined && b.shelfPos !== null) await db.books.update(b.id, { shelfPos: null })
+    }
+  })
+}
+
+export async function bulkSetBinding(ids, binding) {
+  await db.transaction('rw', db.books, async () => {
+    for (const id of ids) await db.books.update(id, { binding: binding || null })
+  })
+}
+
+/* ── Farbverlauf aus dem Cover ── */
+
+const STOPS = 24
+
+function gaussian(arr, r) {
+  const k = []
+  let t = 0
+  for (let i = -r; i <= r; i++) {
+    const w = Math.exp(-(i * i) / (2 * (r / 2) * (r / 2)))
+    k.push(w)
+    t += w
+  }
+  return arr.map((_, i) => {
+    const c = [0, 0, 0]
+    k.forEach((w, j) => {
+      const q = arr[Math.max(0, Math.min(arr.length - 1, i + j - r))]
+      c[0] += q[0] * w; c[1] += q[1] * w; c[2] += q[2] * w
+    })
+    return c.map((v) => v / t)
+  })
+}
+
+const hex = (c) => '#' + c.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')
+
+/** Zeile für Zeile gemittelte Farben des Covers, weich geglättet — als Hex-Liste. */
+export function gradientFromImage(img) {
+  try {
+    const W = 24
+    const H = 90
+    const cv = document.createElement('canvas')
+    cv.width = W
+    cv.height = H
+    const x = cv.getContext('2d', { willReadFrequently: true })
+    x.drawImage(img, 0, 0, W, H)
+    const d = x.getImageData(0, 0, W, H).data
+    const rows = []
+    for (let y = 0; y < H; y++) {
+      let r = 0, g = 0, b = 0
+      for (let xx = 0; xx < W; xx++) {
+        const i = (y * W + xx) * 4
+        r += d[i]; g += d[i + 1]; b += d[i + 2]
+      }
+      rows.push([r / W, g / W, b / W])
+    }
+    const sm = gaussian(rows, 7)
+    const out = []
+    for (let i = 0; i < STOPS; i++) out.push(hex(sm[Math.round((i / (STOPS - 1)) * (H - 1))]))
+    return out
+  } catch {
+    return null
+  }
+}
+
+export function gradientCss(stops) {
+  return `linear-gradient(180deg,${stops.map((c, i) => `${c} ${((i / (stops.length - 1)) * 100).toFixed(1)}%`).join(',')})`
+}
+
+export function fallbackGradient(book) {
+  const c = book.spineColor || colorFromText(book.title)
+  return `linear-gradient(180deg, color-mix(in srgb, ${c} 80%, white), ${c} 45%, color-mix(in srgb, ${c} 70%, black))`
+}
+
+/* Berechnete Verläufe werden gesammelt und gebündelt gespeichert — ein
+   Schreibvorgang statt Hunderter, sonst baut sich die Liste ständig neu auf. */
+const pending = new Map()
+let timer = null
+export function queueSpineGrad(id, stops) {
+  pending.set(id, stops)
+  clearTimeout(timer)
+  timer = setTimeout(async () => {
+    const batch = [...pending]
+    pending.clear()
+    try {
+      await db.transaction('rw', db.books, async () => {
+        for (const [bid, st] of batch) await db.books.update(bid, { spineGrad: st })
+      })
+    } catch { /* wird beim nächsten Öffnen neu berechnet */ }
+  }, 2500)
 }
