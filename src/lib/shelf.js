@@ -83,14 +83,33 @@ export function orderBooks(books) {
   return out
 }
 
+/** Fügt zwischen zwei Reihen (und vor/nach Einzelbänden) eine kleine Lücke ein. */
+export function withSeparators(list) {
+  const out = []
+  let prev = null
+  for (const b of list) {
+    const key = b.series || null
+    if (prev !== undefined && out.length && (key !== prev || !key)) {
+      // Lücke nur, wenn sich die Reihe ändert — Einzelbände stehen dicht beieinander
+      if (key !== prev) out.push({ sep: true, w: 9, id: `sep-${b.id}` })
+    }
+    out.push(b)
+    prev = key
+  }
+  return out
+}
+
 /** Teilt die Bücher je nach Breite auf Bretter auf. */
-export function packRows(items, width, gap = 3) {
+export function packRows(items, width, gap = 2) {
   const rows = []
   let cur = []
   let w = 0
+  const itemW = (it) => (it.sep || it.gap ? it.w : spineWidth(it))
   for (const it of items) {
-    const iw = it.gap ? it.w : spineWidth(it)
-    if (cur.length && w + iw + gap > width) {
+    if (it.sep && !cur.length) continue
+    const iw = itemW(it)
+    if (cur.length && !it.sep && w + iw + gap > width) {
+      while (cur.length && cur[cur.length - 1].sep) cur.pop()
       rows.push(cur)
       cur = []
       w = 0
@@ -98,8 +117,31 @@ export function packRows(items, width, gap = 3) {
     cur.push(it)
     w += iw + gap
   }
+  while (cur.length && cur[cur.length - 1].sep) cur.pop()
   if (cur.length) rows.push(cur)
   return rows
+}
+
+/** Schilder für ein Brett: je Reihe Name und Lage (Start, Breite) in Pixeln. */
+export function rowPlates(row, gap = 2, pad = 0) {
+  const plates = []
+  let x = pad
+  let cur = null
+  for (const it of row) {
+    const iw = it.sep || it.gap ? it.w : spineWidth(it)
+    const name = !it.sep && !it.gap ? it.series || null : null
+    if (name && (!cur || cur.name !== name)) {
+      if (cur) plates.push(cur)
+      cur = { name, x, w: 0 }
+    } else if (!name && cur && !it.gap) {
+      plates.push(cur)
+      cur = null
+    }
+    if (cur) cur.w = x + iw - cur.x
+    x += iw + gap
+  }
+  if (cur) plates.push(cur)
+  return plates
 }
 
 /** Speichert die komplette Reihenfolge — eine Transaktion, nur geänderte Bücher. */

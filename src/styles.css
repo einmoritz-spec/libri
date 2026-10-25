@@ -2652,3 +2652,47 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 /* Statusfilter: immer eine Zeile; „Abgebrochen“ liegt im Filter-Blatt */
 .chips-row { flex-wrap: nowrap; }
 .chips-row .chip { font-size: 13px; padding: 5px 10px; }
+
+/* ── Regal: Möbel-Look (Rückwand, Seitenwände, flache Bretter, Schilder) ── */
+.sv-case {
+  --wood: #a1703f; --wood-dark: #7d5430;
+  position: relative; margin: 6px 0 0; padding: 0 7px;
+  border-left: 7px solid var(--wood-dark); border-right: 7px solid var(--wood-dark);
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.05) 70px), color-mix(in srgb, var(--raised) 93%, var(--wood));
+  box-shadow: inset 0 10px 14px -8px rgba(0,0,0,.35), inset 6px 0 8px -6px rgba(0,0,0,.25), inset -6px 0 8px -6px rgba(0,0,0,.25);
+}
+.sv-case::before { content: ""; position: absolute; left: -7px; right: -7px; top: -7px; height: 7px; border-radius: 4px 4px 0 0; background: var(--wood-dark); }
+.sv-shelf { margin-bottom: 0; }
+.sv-row { padding: 10px 0 0; gap: 2px; }
+.sv-board {
+  height: 7px; margin: 0 -7px; border-radius: 0;
+  background: linear-gradient(#b27e4a, var(--wood) 60%, var(--wood-dark));
+  box-shadow: 0 3px 5px rgba(0,0,0,.35);
+}
+.sv-plates { position: relative; height: 17px; margin: 0 -7px; background: var(--wood-dark); }
+.sv-plate {
+  position: absolute; top: 3px; height: 11px; padding: 0 5px; border-radius: 2px;
+  font: 600 7.5px/11px var(--sans); letter-spacing: .03em; text-transform: uppercase;
+  color: #3a2814; background: #ead9b7; box-shadow: 0 1px 1px rgba(0,0,0,.4);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
+}
+.sv-sep { flex: none; }
+
+.sp { overflow: visible; }
+/* Kopf- und Fußband am Rücken + feine Papierstruktur */
+.sp::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 0; bottom: 0; pointer-events: none; z-index: 2; border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(0,0,0,.28) 0, rgba(0,0,0,.28) 2px, rgba(255,255,255,.18) 2px, rgba(255,255,255,.18) 3px, transparent 3px),
+    linear-gradient(0deg, rgba(0,0,0,.3) 0, rgba(0,0,0,.3) 2px, rgba(255,255,255,.14) 2px, rgba(255,255,255,.14) 3px, transparent 3px),
+    repeating-linear-gradient(0deg, rgba(255,255,255,.035) 0 1px, transparent 1px 3px);
+}
+.sp.reading { transform: translateY(-9px); }
+.sp.lifted { transform: translateY(-12px); }
+.sp.reading.lifted { transform: translateY(-14px); }
+.sv-bm {
+  position: absolute; left: 50%; top: -11px; width: 7px; height: 14px; margin-left: -3.5px; z-index: 3;
+  background: #c4452f; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+  filter: drop-shadow(0 1px 1px rgba(0,0,0,.4));
+}

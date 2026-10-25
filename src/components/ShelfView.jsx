@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  orderBooks, packRows, saveOrder, spineWidth, spineHeight,
+  orderBooks, packRows, rowPlates, withSeparators, saveOrder, spineWidth, spineHeight,
   gradientFromImage, gradientCss, fallbackGradient, queueSpineGrad
 } from '../lib/shelf'
 import { useCoverSrc, EmptyBookIcon } from './ui'
@@ -56,13 +56,14 @@ function Spine({ book, mode, lifted, dragged, ...handlers }) {
   const h = spineHeight(book)
   return (
     <div
-      className={`sp${lifted ? ' lifted' : ''}${dragged ? ' dragged' : ''}`}
+      className={`sp${lifted ? ' lifted' : ''}${dragged ? ' dragged' : ''}${book.status === 'reading' ? ' reading' : ''}`}
       data-id={book.id}
       style={{ width: w, height: h, background }}
       {...handlers}
     >
       {!bare && book.seriesIndex ? <span className="sv-no">{book.seriesIndex}</span> : null}
       {!bare && <span className="sv-t"><span>{book.title}</span></span>}
+      {book.status === 'reading' && !bare && <i className="sv-bm" />}
       {!bare && book.files?.length > 0 && <EbookIcon />}
       {!bare && book.status === 'read' && <CheckIcon />}
     </div>
@@ -112,11 +113,11 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
   const shownOrder = useMemo(() => order.filter((b) => visibleIds.has(b.id)), [order, visibleIds])
 
   const items = useMemo(() => {
-    if (!drag) return shownOrder
+    if (!drag) return withSeparators(shownOrder)
     const rest = shownOrder.filter((b) => b.id !== drag.book.id)
     const out = [...rest]
     out.splice(Math.min(dropIndex, out.length), 0, { gap: true, w: spineWidth(drag.book), id: 'gap' })
-    return out
+    return withSeparators(out)
   }, [shownOrder, drag, dropIndex])
 
   const rows = useMemo(() => packRows(items, width), [items, width])
@@ -235,11 +236,14 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
 
   return (
     <div className="sv" ref={wrapRef}>
+      <div className="sv-case">
       {rows.map((row, ri) => (
         <div className="sv-shelf" key={ri}>
           <div className="sv-row">
             {row.map((it) =>
-              it.gap ? (
+              it.sep ? (
+                <div key={it.id} className="sv-sep" style={{ width: it.w }} />
+              ) : it.gap ? (
                 <div key="gap" className="sv-gap" style={{ width: it.w }} />
               ) : (
                 <Spine
@@ -256,8 +260,15 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
             )}
           </div>
           <div className="sv-board" />
+          <div className="sv-plates">
+            {rowPlates(row).filter((pl) => pl.w >= 40).map((pl) => (
+              <span key={pl.name + pl.x} className="sv-plate" style={{ left: pl.x + 7, maxWidth: pl.w }}>{pl.name}</span>
+            ))}
+          </div>
         </div>
       ))}
+
+      </div>
 
       {drag && ghost && (
         <div className="sv-ghost" style={{ left: ghost.x, top: ghost.y }}>
