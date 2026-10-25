@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadRuntimes } from '../lib/audio'
 import { exportLibrary, importLibrary, importLinks, autoBackupBeforeImport, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
-import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -87,9 +86,6 @@ export default function Settings({ notify, onOpenShop }) {
     localStorage.setItem('libri:celebrate', on ? '1' : '0')
   }
   const days = daysSinceBackup()
-  const [diag, setDiag] = useState(null)
-  const [diagBusy, setDiagBusy] = useState(false)
-  const [diagIsbn, setDiagIsbn] = useState('')
   const [cover, setCover] = useState(null)
   const [audioRun, setAudioRun] = useState(null)
 
@@ -124,16 +120,6 @@ export default function Settings({ notify, onOpenShop }) {
     await resetShopTried()
     setCover(null)
     notify(n ? `${n} Bücher werden beim nächsten Durchlauf wieder versucht` : 'Nichts zurückzusetzen')
-  }
-
-  async function runDiagnose() {
-    setDiagBusy(true)
-    setDiag(null)
-    try {
-      setDiag(await diagnoseSources(diagIsbn))
-    } finally {
-      setDiagBusy(false)
-    }
   }
 
   function setTheme(next) {
@@ -309,36 +295,6 @@ export default function Settings({ notify, onOpenShop }) {
             <button className="btn" onClick={trimCovers} disabled={Boolean(trimming)}>
               {trimming ? `Cover prüfen … ${trimming.done} von ${trimming.total}` : 'Schwarze Cover-Ränder entfernen'}
             </button>
-          </div>
-        )}
-      </Section>
-
-      <Section title="Quellen prüfen">
-        <form className="scan-isbn" style={{ marginTop: 4 }}
-          onSubmit={(e) => { e.preventDefault(); if (!diagBusy) runDiagnose() }}>
-          <input
-            className="scan-isbn-input"
-            inputMode="numeric"
-            placeholder="ISBN (leer = Testbuch)"
-            value={diagIsbn}
-            onChange={(e) => setDiagIsbn(e.target.value)}
-            aria-label="ISBN zum Prüfen"
-          />
-          <button className="scan-isbn-go" type="submit" disabled={diagBusy} aria-label="Prüfen">
-            {diagBusy ? <span className="spinner" /> : '→'}
-          </button>
-        </form>
-
-        {diag && (
-          <div className="diag">
-            {diag.results.map((r) => (
-              <div className="diag-row" key={r.name}>
-                <span className={r.ok ? 'diag-ok' : 'diag-bad'}>{r.ok ? '\u2713' : '\u2717'}</span>
-                <span className="diag-name">{r.name}</span>
-                <span className="diag-detail">{r.detail}</span>
-                <span className="diag-ms">{r.ms} ms</span>
-              </div>
-            ))}
           </div>
         )}
       </Section>
