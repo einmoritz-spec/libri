@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { loadRuntimes } from '../lib/audio'
-import { exportLibrary, importLibrary, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
+import { exportLibrary, importLibrary, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { diagnoseSources } from '../lib/metadata'
 import { parseBackupText } from '../lib/backupText'
 
@@ -49,6 +49,8 @@ export default function Settings({ notify, onOpenShop }) {
   const [celebrate, setCelebrateState] = useState(
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
+  const [fdiag, setFdiag] = useState(null)
+  useEffect(() => { getDiag().then(setFdiag).catch(() => {}) }, [])
   const [readLib, setReadLibState] = useState(() => localStorage.getItem('libri:readBtnLib') === '1')
   const [readShop, setReadShopState] = useState(() => localStorage.getItem('libri:readBtnShop') === '1')
   const [kidsTab, setKidsTabState] = useState(
@@ -332,6 +334,12 @@ export default function Settings({ notify, onOpenShop }) {
         <button className="btn btn-danger" onClick={wipe}>Bibliothek leeren</button>
       </Section>
 
+      {fdiag && (
+        <p className="settings-version">
+          {fdiag.books} Bücher · {fdiag.bookFiles} mit Drive-Datei · Shop: {fdiag.metaFiles} Verknüpfungen ·
+          Maas-Bücher: {fdiag.maasOwned} in der Bibliothek ({fdiag.maas} gesamt) · versteckter Shop: {fdiag.flag}
+        </p>
+      )}
       <p className="settings-version">
         Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
       </p>

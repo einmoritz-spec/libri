@@ -1336,6 +1336,24 @@ export async function hasMaasBook() {
     && ((b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || ''))))
 }
 
+/** Kleine Selbstauskunft für die Einstellungen: Sind Drive-Verknüpfungen da, wird der Maas-Schalter erkannt? */
+export async function getDiag() {
+  const books = await db.books.toArray()
+  const metas = await db.shopMeta.toArray()
+  const rx = /\bmaas\b/i
+  const maas = books.filter((b) => (b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || '')))
+  let flag = '?'
+  try { flag = localStorage.getItem('libri:shopUnlock') === '1' ? 'an' : 'aus' } catch { /* egal */ }
+  return {
+    books: books.length,
+    bookFiles: books.filter((b) => b.files?.length).length,
+    metaFiles: metas.filter((m) => m.files?.length).length,
+    maas: maas.length,
+    maasOwned: maas.filter((b) => b.status !== 'wishlist').length,
+    flag
+  }
+}
+
 const WISH_QUEUE = 'libri:wishQ'
 
 function splitAuthors(a) {
