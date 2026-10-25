@@ -2631,3 +2631,11 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .sv-peek-text span { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sv-reset { white-space: nowrap; font-size: 12px; padding: 4px 10px; min-height: 0; flex: none; }
 .sv-head > span { min-width: 0; }
+
+.setting-block { padding: 12px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin: 2px 0; }
+.setting-block-head { display: flex; flex-direction: column; gap: 3px; font-size: 15px; margin-bottom: 10px; }
+.setting-block-head small { font-size: 12px; line-height: 1.4; color: var(--dim); }
+.seg3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 999px; }
+.seg3 button { background: none; border: 0; color: var(--dim); font-size: 14px; padding: 8px 0; border-radius: 999px; transition: background-color .15s var(--ease), color .15s var(--ease); }
+.seg3 button[aria-pressed='true'] { background: var(--lamp); color: var(--night); font-weight: 500; }
+.seg3-hint { display: block; margin-top: 8px; font-size: 12px; color: var(--dim); }

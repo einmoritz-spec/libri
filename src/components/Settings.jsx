@@ -245,13 +245,22 @@ export default function Settings({ notify, onOpenShop }) {
         <Row label="„Als Nächstes dran“ auf Start">
           <OnOff on={upNext} set={setUpNext} />
         </Row>
-        <Row label="Regal-Ansicht">
-          <div className="view-toggle" role="group" aria-label="Regal-Ansicht">
+        <div className="setting-block">
+          <div className="setting-block-head">
+            <span>Regal-Ansicht</span>
+            <small>Bücher als Rücken im Regal, frei umsortierbar. Erscheint in der Bibliothek neben Raster und Liste.</small>
+          </div>
+          <div className="seg3" role="group" aria-label="Regal-Ansicht">
             {[['off', 'Aus'], ['gradient', 'Verlauf'], ['cover', 'Cover']].map(([k, l]) => (
               <button key={k} aria-pressed={shelfMode === k} onClick={() => setShelfMode(k)}>{l}</button>
             ))}
           </div>
-        </Row>
+          <small className="seg3-hint">
+            {shelfMode === 'gradient' ? 'Rückenfarben als weicher Verlauf aus dem Cover.'
+              : shelfMode === 'cover' ? 'Linker Cover-Rand als Rücken, in Originalpixeln.'
+                : 'Regal ist ausgeblendet.'}
+          </small>
+        </div>
         <Row label="Bilderbücher-Reiter">
           <OnOff on={kidsTab} set={setKidsTab} />
         </Row>
