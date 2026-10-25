@@ -418,7 +418,7 @@ function startView(){
   if(!SV.top)SV.top=shuffle([...gs.entries()].filter(e=>e[1].length>=3)).slice(0,8);const top=SV.top;
   return `<div class="sh" style="margin-top:18px"><h2>Entdecken</h2><button data-go="shop" data-sort="rel">Alle Bücher ›</button></div>${railHtml(r1)}
   <div class="sh"><h2>Reihen</h2></div>
-  <div class="tiles">${top.map(([g,L])=>{const l=sorted(L.filter(p=>!p.c));const stk=(l.filter(p=>p.l==='de').length?l.filter(p=>p.l==='de'):l).slice(0,3);
+  <div class="tiles">${top.map(([g,L])=>{const l=sorted(L.filter(p=>!p.c));const nd=l.filter(p=>p.l==='de'),ne=l.filter(p=>p.l==='en');const stk=(nd.length>=ne.length?(nd.length?nd:l):ne).slice(0,3);
     return `<button class="tile" data-series="${esc(g)}"><div class="stack">${stk.map(p=>cover(p)).join('')}</div><span><b>${esc(g.split(' / ')[0])}</b><small>${L.length} Bücher · ${esc(L[0].p)}</small></span></button>`}).join('')}</div>
   <div class="sh"><h2>Nach Genre stöbern</h2></div>
   <div class="genres">${GEN.filter(g=>genC[g]).map(g=>`<button class="gchip" data-genre="${esc(g)}">${esc(g)}<small>${genC[g]}</small></button>`).join('')}</div>
