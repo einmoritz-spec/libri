@@ -2711,3 +2711,5 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
   font: 600 8px/1 var(--sans); letter-spacing: .09em; color: var(--dim); }
 .sv-bm { background: var(--lamp); top: -10px; width: 6px; height: 13px; margin-left: -3px; }
 .sv-sep { width: 10px !important; }
+
+.sv-shelf { margin-bottom: 6px; }

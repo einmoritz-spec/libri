@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  orderBooks, packRows, rowPlates, withSeparators, saveOrder, spineWidth, spineHeight,
+  orderBooks, packRows, withSeparators, saveOrder, spineWidth, spineHeight,
   gradientFromImage, gradientCss, fallbackGradient, queueSpineGrad
 } from '../lib/shelf'
 import { useCoverSrc, EmptyBookIcon } from './ui'
@@ -260,11 +260,6 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
             )}
           </div>
           <div className="sv-board" />
-          <div className="sv-plates">
-            {rowPlates(row).filter((pl) => pl.w >= 40).map((pl) => (
-              <span key={pl.name + pl.x} className="sv-plate" style={{ left: pl.x + 10, maxWidth: pl.w }}>{pl.name}</span>
-            ))}
-          </div>
         </div>
       ))}
 
