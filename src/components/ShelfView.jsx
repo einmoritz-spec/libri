@@ -262,7 +262,7 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
           <div className="sv-board" />
           <div className="sv-plates">
             {rowPlates(row).filter((pl) => pl.w >= 40).map((pl) => (
-              <span key={pl.name + pl.x} className="sv-plate" style={{ left: pl.x + 7, maxWidth: pl.w }}>{pl.name}</span>
+              <span key={pl.name + pl.x} className="sv-plate" style={{ left: pl.x + 10, maxWidth: pl.w }}>{pl.name}</span>
             ))}
           </div>
         </div>
