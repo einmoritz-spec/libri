@@ -289,34 +289,6 @@ export default function Settings({ notify, onOpenShop }) {
               </p>
             )}
             <button className="btn" onClick={retryAll}>Erfolglose erneut versuchen</button>
-            {shopRun?.running ? (
-              <div className="setting-progress">
-                <span><span className="spinner" /> Shop-Daten {shopRun.done} von {shopRun.total} · {shopRun.filled} gefunden</span>
-                <button className="btn btn-quiet" onClick={() => { stopRef.current = true }}>Abbrechen</button>
-              </div>
-            ) : (
-              <button className="btn" onClick={runShopData}>Shop-ISBNs und Seitenzahlen suchen</button>
-            )}
-            {shopRun && !shopRun.running && (
-              <p className="setting-result">{shopRun.failed ? 'Das hat nicht geklappt.' : `${shopRun.filled} Shop-Bücher ergänzt`}</p>
-            )}
-            {audioRun?.running ? (
-              <div className="setting-progress">
-                <span><span className="spinner" /> Hörbuch-Zeiten {audioRun.done} von {audioRun.total} · {audioRun.filled} gefunden</span>
-                <button className="btn btn-quiet" onClick={() => { stopRef.current = true }}>Abbrechen</button>
-              </div>
-            ) : (
-              <button className="btn" onClick={runAudio}>Hörbuch-Laufzeiten laden</button>
-            )}
-            {audioRun && !audioRun.running && (
-              <p className="setting-result">
-                {audioRun.failed
-                  ? 'Das hat nicht geklappt.'
-                  : audioRun.blocked
-                    ? 'Audible lässt den Abruf aus der App nicht zu. Es werden weiter geschätzte Zeiten („ca.“) angezeigt.'
-                    : `${audioRun.filled} gefunden · ${audioRun.missing} ohne Treffer (dort bleibt es geschätzt)`}
-              </p>
-            )}
             <button className="btn" onClick={trimCovers} disabled={Boolean(trimming)}>
               {trimming ? `Cover prüfen … ${trimming.done} von ${trimming.total}` : 'Schwarze Cover-Ränder entfernen'}
             </button>
