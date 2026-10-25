@@ -1373,15 +1373,16 @@ export async function getShopLibraryStatus() {
     Nur dann zeigt der Shop seine versteckten Einträge. */
 export async function maasBooks() {
   const rx = /\bmaas\b/i
-  const serRx = /throne of glass|crescent city|reich der sieben h[öo]fe|court of thorns|dornen und rosen|city of|wenn das dunkel erwacht|kriegerin im schatten/i
-  let shop = null
-  try { shop = await loadShop() } catch { /* ohne Katalog nur nach Autorenfeld */ }
+  const nz = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '')
+  let titles = new Set()
+  try {
+    const shop = await loadShop()
+    titles = new Set(shop.list.filter((p) => rx.test(p.a)).map((p) => nz(p.t)).filter((t) => t.length > 5))
+  } catch { /* ohne Katalog nur nach Autorenfeld */ }
   return (await db.books.toArray()).filter((b) => {
     if ((b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || ''))) return true
-    if (serRx.test(`${b.series || ''} ${b.title || ''}`) && /\b(sarah|maas|j\.?)\b/i.test((b.authors || []).join(' ')) ) return true
-    // Über den Shop-Katalog: das Buch ist dort ein Maas-Titel
-    const p = shop && ((b.shopKey && shop.byKey.get(b.shopKey)) || matchBook(shop, b))
-    return !!(p && rx.test(p.a))
+    const t = nz(String(b.title || '').replace(/\(.*?\)/g, ''))
+    return !!t && (titles.has(t) || [...titles].some((x) => t.startsWith(x) || x.startsWith(t) && t.length > 8))
   })
 }
 

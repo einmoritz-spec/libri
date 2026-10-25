@@ -50,6 +50,7 @@ export default function Settings({ notify, onOpenShop }) {
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
   const [fdiag, setFdiag] = useState(null)
+  const [showDiag, setShowDiag] = useState(false)
   useEffect(() => { getDiag().then(setFdiag).catch(() => {}) }, [])
   const [readLib, setReadLibState] = useState(() => localStorage.getItem('libri:readBtnLib') === '1')
   const [readShop, setReadShopState] = useState(() => localStorage.getItem('libri:readBtnShop') === '1')
@@ -346,15 +347,15 @@ export default function Settings({ notify, onOpenShop }) {
         <button className="btn btn-danger" onClick={wipe}>Bibliothek leeren</button>
       </Section>
 
-      {fdiag && (
+      <p className="settings-version" onClick={() => setShowDiag((v) => !v)}>
+        Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
+      </p>
+      {showDiag && fdiag && (
         <p className="settings-version">
           {fdiag.books} Bücher · {fdiag.bookFiles} mit Drive-Datei · Shop: {fdiag.metaFiles} Verknüpfungen ·
           Maas-Bücher: {fdiag.maasOwned} in der Bibliothek ({fdiag.maas} gesamt) · versteckter Shop: {fdiag.flag}
         </p>
       )}
-      <p className="settings-version">
-        Version vom {new Date(__BUILD_TIME__).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })}
-      </p>
     </div>
   )
 }
