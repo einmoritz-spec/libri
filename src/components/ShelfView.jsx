@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  orderBooks, packRows, saveOrder, resetOrder, spineWidth, spineHeight,
+  orderBooks, packRows, saveOrder, spineWidth, spineHeight,
   gradientFromImage, gradientCss, fallbackGradient, queueSpineGrad
 } from '../lib/shelf'
 import { useCoverSrc, EmptyBookIcon } from './ui'
@@ -84,7 +84,12 @@ function Peek({ book, onOpen, onClose }) {
   )
 }
 
-export default function ShelfView({ all, visible, mode, onOpen, locked }) {
+/* Umsortieren per Halten & Ziehen ist abgeschaltet (Wunsch); der Code bleibt,
+   falls es zurückkommen soll: Schalter auf true setzen. */
+const DRAG_ENABLED = false
+
+export default function ShelfView({ all, visible, mode, onOpen, locked: lockedProp }) {
+  const locked = lockedProp || !DRAG_ENABLED
   const wrapRef = useRef(null)
   const [width, setWidth] = useState(340)
   const [drag, setDrag] = useState(null) // { book }
@@ -115,8 +120,6 @@ export default function ShelfView({ all, visible, mode, onOpen, locked }) {
   }, [shownOrder, drag, dropIndex])
 
   const rows = useMemo(() => packRows(items, width), [items, width])
-
-  const hasCustom = all.some((b) => Number.isFinite(b.shelfPos))
 
   function indexAt(x, y) {
     const els = [...wrapRef.current.querySelectorAll('.sp[data-id]')].filter((e) => !e.classList.contains('dragged'))
@@ -232,17 +235,6 @@ export default function ShelfView({ all, visible, mode, onOpen, locked }) {
 
   return (
     <div className="sv" ref={wrapRef}>
-      <div className="sv-head">
-        <span>
-          {locked
-            ? 'Bei aktivem Filter lässt sich nicht umsortieren.'
-            : 'Halten & ziehen zum Umsortieren · Tippen für Infos'}
-        </span>
-        {hasCustom && !locked && (
-          <button className="btn btn-quiet sv-reset" onClick={() => resetOrder(all)}>Zurücksetzen</button>
-        )}
-      </div>
-
       {rows.map((row, ri) => (
         <div className="sv-shelf" key={ri}>
           <div className="sv-row">

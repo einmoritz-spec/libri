@@ -2591,7 +2591,7 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 }
 .sp {
   position: relative; flex: none; border-radius: 3px 3px 1px 1px; overflow: hidden;
-  cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  cursor: pointer; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   touch-action: pan-y;
   box-shadow: inset 3px 0 5px rgba(255,255,255,.14), inset -4px 0 6px rgba(0,0,0,.4), 2px 0 3px rgba(0,0,0,.35);
   transition: transform .18s var(--ease);
