@@ -872,20 +872,10 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
     await new Promise((r) => setTimeout(r, 350))
   }
 
-  let shopItems = { filled: 0, total: 0 }
-  if (!ids && !shouldStop?.()) {
-    try {
-      shopItems = await enrichShopItems({
-        onProgress: (p) => onProgress?.({ ...p, title: 'Shop-Bücher', filled: filled + p.filled }),
-        shouldStop
-      })
-    } catch { /* Shop nicht lesbar — Rest ist erledigt */ }
-  }
   onProgress?.({ done: missing.length, total: missing.length, filled })
   return {
-    filled: filled + shopItems.filled, failed, skipped,
-    total: missing.length + shopFilled + shopItems.total, shopFilled: shopFilled + shopItems.filled,
-    shopStats: shopItems.stats || null
+    filled, failed, skipped,
+    total: missing.length, shopFilled
   }
 }
 

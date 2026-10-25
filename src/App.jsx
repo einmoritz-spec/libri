@@ -5,10 +5,33 @@ import Library from './components/Library'
 import Scan from './components/Scan'
 // Erst laden, wenn der Tab wirklich geöffnet wird — verkleinert das, was beim
 // Start heruntergeladen und ausgeführt werden muss.
-const Stats = lazy(() => import('./components/Stats'))
-const Settings = lazy(() => import('./components/Settings'))
-const ShopView = lazy(() => import('./components/ShopView'))
-const QuickEdit = lazy(() => import('./components/QuickEdit'))
+// Nach einem Update kann der Browser noch alte Dateinamen kennen. Dann erst
+// noch einmal versuchen, danach einmalig die Seite neu laden.
+function lazyRetry(load) {
+  return lazy(async () => {
+    try {
+      return await load()
+    } catch (e) {
+      try {
+        await new Promise((r) => setTimeout(r, 600))
+        return await load()
+      } catch (e2) {
+        let again = false
+        try { again = sessionStorage.getItem('libri:chunkReload') !== '1'; if (again) sessionStorage.setItem('libri:chunkReload', '1') } catch { /* egal */ }
+        if (again) {
+          try { const regs = await navigator.serviceWorker?.getRegistrations?.(); await Promise.all((regs || []).map((r) => r.update())) } catch { /* egal */ }
+          location.reload()
+          return new Promise(() => {})
+        }
+        throw e2
+      }
+    }
+  })
+}
+const Stats = lazyRetry(() => import('./components/Stats'))
+const Settings = lazyRetry(() => import('./components/Settings'))
+const ShopView = lazyRetry(() => import('./components/ShopView'))
+const QuickEdit = lazyRetry(() => import('./components/QuickEdit'))
 import BookDetail from './components/BookDetail'
 import AuthorView from './components/AuthorView'
 import BookForm from './components/BookForm'
