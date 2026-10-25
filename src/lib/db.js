@@ -1371,20 +1371,33 @@ export async function getShopLibraryStatus() {
 
 /** Steht ein Buch von Sarah J. Maas in der Bibliothek (nicht nur auf der Wunschliste)?
     Nur dann zeigt der Shop seine versteckten Einträge. */
-export async function hasMaasBook() {
+export async function maasBooks() {
   const rx = /\bmaas\b/i
-  return (await db.books.toArray()).some((b) => b.status !== 'wishlist'
-    && ((b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || ''))))
+  const serRx = /throne of glass|crescent city|reich der sieben h[öo]fe|court of thorns|dornen und rosen|city of|wenn das dunkel erwacht|kriegerin im schatten/i
+  let shop = null
+  try { shop = await loadShop() } catch { /* ohne Katalog nur nach Autorenfeld */ }
+  return (await db.books.toArray()).filter((b) => {
+    if ((b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || ''))) return true
+    if (serRx.test(`${b.series || ''} ${b.title || ''}`) && /\b(sarah|maas|j\.?)\b/i.test((b.authors || []).join(' ')) ) return true
+    // Über den Shop-Katalog: das Buch ist dort ein Maas-Titel
+    const p = shop && ((b.shopKey && shop.byKey.get(b.shopKey)) || matchBook(shop, b))
+    return !!(p && rx.test(p.a))
+  })
+}
+
+export async function hasMaasBook() {
+  return (await maasBooks()).some((b) => b.status !== 'wishlist')
 }
 
 /** Kleine Selbstauskunft für die Einstellungen: Sind Drive-Verknüpfungen da, wird der Maas-Schalter erkannt? */
 export async function getDiag() {
   const books = await db.books.toArray()
   const metas = await db.shopMeta.toArray()
-  const rx = /\bmaas\b/i
-  const maas = books.filter((b) => (b.authors || []).some((x) => rx.test(x)) || rx.test(String(b.author || '')))
+  const maas = await maasBooks()
   let flag = '?'
-  try { flag = localStorage.getItem('libri:shopUnlock') === '1' ? 'an' : 'aus' } catch { /* egal */ }
+  const on = maas.some((b) => b.status !== 'wishlist')
+  try { localStorage.setItem('libri:shopUnlock', on ? '1' : '0') } catch { /* egal */ }
+  flag = on ? 'an' : 'aus'
   return {
     books: books.length,
     bookFiles: books.filter((b) => b.files?.length).length,
