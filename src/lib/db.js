@@ -584,12 +584,16 @@ export async function importLinks(payload) {
   let linked = 0
   let missing = 0
   for (const raw of payload.books || []) {
-    if (!Array.isArray(raw.files) || !raw.files.length) continue
+    const hasFiles = Array.isArray(raw.files) && raw.files.length
+    if (!hasFiles && !(raw.audioMinutes > 0)) continue
     const existing = raw.isbn13
       ? await findByIsbn(raw.isbn13)
       : await findByTitleAuthor(raw.title, raw.authors?.[0])
     if (!existing) { missing++; continue }
-    await updateBook(existing.id, { files: raw.files })
+    await updateBook(existing.id, {
+      ...(hasFiles ? { files: raw.files } : {}),
+      ...(raw.audioMinutes > 0 && !(existing.audioMinutes > 0) ? { audioMinutes: raw.audioMinutes } : {})
+    })
     linked++
   }
   let shopLinked = 0
