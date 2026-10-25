@@ -82,6 +82,7 @@ button{cursor:pointer}
 .cv .t2.s{font-size:2.2em}
 .cv .t3{font:700 1.05em/1.15 var(--serif);text-align:center;padding-inline:4%;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;text-wrap:balance}
 .cv .t4{font:500 .55em/1.25 var(--sans);letter-spacing:.05em;text-align:center;opacity:.8;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.pc.gap{opacity:.45;filter:grayscale(1);pointer-events:none}.gap .pc-img{display:block;position:relative}.gapbox{display:block;aspect-ratio:2/3;border-radius:10px;background:var(--line);border:1.5px dashed var(--line2)}.gapn{font-size:12px;color:var(--muted);margin-top:6px;font-weight:600}
 .pc{display:flex;flex-direction:column;min-width:0;position:relative}
 .pc-img{border:0;background:none;padding:0;display:block;position:relative;font-size:11px}
 .bdg{position:absolute;z-index:3;left:-4px;top:-9px;background:var(--pill);color:#F7EBD4;font:600 11px/1 var(--sans);padding:5px 8px;border-radius:999px;white-space:nowrap}
@@ -483,6 +484,20 @@ function shopView(){
 function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[1]):g}
 // Bände nach Bandnummer ordnen (Unterreihen bleiben zusammen), egal in welcher Reihenfolge sie in den Katalog kamen.
 function ordSer(a){const so=new Map();a.forEach(p=>{if(!so.has(p.s))so.set(p.s,so.size)});const nv=p=>{const v=parseFloat(String(p.n).replace('–','-'));return isNaN(v)?1e9:v};return a.map((p,i)=>[p,i]).sort((x,y)=>so.get(x[0].s)-so.get(y[0].s)||nv(x[0])-nv(y[0])||x[1]-y[1]).map(v=>v[0])}
+// Fehlende Bände einer Reihe als ausgegraute Platzhalter (Cover/Titel nach Möglichkeit aus der anderen Sprache)
+function gapMap(items,all){
+  const ns=items.filter(p=>!p.c&&/^\d+$/.test(String(p.n))).map(p=>+p.n);
+  if(ns.length<2)return {};const mx=Math.max(...ns);if(mx>60)return {};
+  const have=new Set(ns),out={};
+  for(let n=1;n<mx;n++)if(!have.has(n)){
+    const o=all.find(p=>p.l!==items[0].l&&String(p.n)===String(n)&&!p.c);
+    out[n]={o}}
+  return out}
+function gapCard(n,g){
+  const o=g.o;
+  return `<article class="pc gap" aria-disabled="true"><div class="pc-img"><span class="bdg">Band ${n}</span>${o?cover(o):'<span class="gapbox"></span>'}</div>
+  <div class="pc-t">${o?esc(title(o)):'Band '+n}</div><div class="pc-a">${o?esc(o.a):''}</div>
+  <div class="gapn">Nicht im Shop</div></article>`}
 function seriesView(){
   const all=P.filter(p=>p.g===S.ser);if(!all.length)return shopView();
   const langs=['de','en'].filter(l=>all.some(p=>p.l===l));
@@ -490,7 +505,13 @@ function seriesView(){
   const items=ordSer(all.filter(p=>p.l===lang));
   const mm=p=>p.eb?'e':'b';const allV=items.filter(p=>!p.c);const vols=allV.filter(p=>!have(p));const nHave=allV.length-vols.length;const nIn=vols.filter(p=>inCart(p,mm(p))).length;const allIn=vols.length>0&&nIn===vols.length;
   const subs=new Set(items.map(p=>p.s));let cur=null,body='';
-  items.forEach(p=>{if(subs.size>1&&p.s!==cur){cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}body+=card(p)});
+  const gaps=subs.size>1?{}:gapMap(items,all);let gDone=false;
+  const gapHtml=n=>gaps[n]?gapCard(n,gaps[n]):'';
+  items.forEach(p=>{if(subs.size>1&&p.s!==cur){cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}
+    const v=/^\d+$/.test(String(p.n))?+p.n:null;
+    if(v!==null)for(const g of Object.keys(gaps).map(Number).filter(g=>g<v&&!gaps[g].done)){gaps[g].done=1;body+=gapHtml(g)}
+    body+=card(p)});
+  Object.keys(gaps).map(Number).filter(g=>!gaps[g].done).forEach(g=>{body+=gapHtml(g)});
   const au=[...new Set(all.map(p=>p.p))].slice(0,3).join(', ');
   const tog=langs.length>1?`<div class="lt" role="group" aria-label="Sprache">${langs.map(l=>`<button data-sl="${l}" aria-pressed="${l===lang}">${l.toUpperCase()}</button>`).join('')}</div>`:'';
   return `<button class="back" data-go="shop">‹ Zurück</button>
