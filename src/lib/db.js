@@ -756,8 +756,8 @@ function isIncomplete(b) {
 /** Hebt den Vermerk "schon versucht" für alle Bücher auf, damit die
     Ergänzung sie beim nächsten Mal wieder anfragt. */
 export async function resetEnrichTried() {
-  const n = await db.books.filter((b) => b.enrichTried !== undefined).count()
-  await db.books.toCollection().modify((b) => { delete b.enrichTried; delete b.descriptionTried; delete b.audioTried })
+  const n = await db.books.filter((b) => b.enrichTried !== undefined || b.titleTried).count()
+  await db.books.toCollection().modify((b) => { delete b.enrichTried; delete b.descriptionTried; delete b.audioTried; delete b.titleTried })
   return n
 }
 
@@ -872,10 +872,27 @@ export async function backfillCovers({ onProgress, shouldStop, ids = null } = {}
     await new Promise((r) => setTimeout(r, 350))
   }
 
+  // Bücher ohne ISBN (z. B. aus dem Shop übernommen): per Titel und Autor suchen.
+  let titleFilled = 0
+  let titleTotal = 0
+  if (!shouldStop?.()) {
+    const noIsbn = all.filter((b) => !b.isbn13 && isIncomplete(b) && (ids || !b.titleTried)).map((b) => b.id)
+    titleTotal = noIsbn.length
+    if (noIsbn.length) {
+      try {
+        const r = await enrichShelfBooks(noIsbn, {
+          skipBackfill: true, shouldStop,
+          onProgress: (p) => onProgress?.({ ...p, filled: filled + p.filled })
+        })
+        titleFilled = r?.filled || 0
+      } catch { /* Rest ist erledigt */ }
+    }
+  }
+  filled += titleFilled
   onProgress?.({ done: missing.length, total: missing.length, filled })
   return {
     filled, failed, skipped,
-    total: missing.length, shopFilled
+    total: missing.length + titleTotal, shopFilled
   }
 }
 
@@ -1537,12 +1554,17 @@ export function flushShopOrders() {
 /** Fehlende Angaben für einzelne Bücher suchen — wie „Angaben ergänzen“ in den
     Einstellungen: erst Shop-Daten und ISBN-Kataloge, dann bei fehlender ISBN
     per Titel und Autor online. */
-export async function enrichShelfBooks(ids) {
-  try { await backfillCovers({ ids }) } catch { /* weiter mit der Titelsuche */ }
+export async function enrichShelfBooks(ids, { onProgress, shouldStop, skipTried = false, skipBackfill = false } = {}) {
+  if (!skipBackfill) { try { await backfillCovers({ ids }) } catch { /* weiter mit der Titelsuche */ } }
   const shop = await loadShop().catch(() => null)
-  for (const id of ids) {
+  let filledN = 0
+  for (let i = 0; i < ids.length; i++) {
+    if (shouldStop?.()) break
+    const id = ids[i]
     let b = await db.books.get(id)
     if (!b || !isIncomplete(b)) continue
+    if ((skipTried || !skipBackfill) && b.titleTried) continue
+    onProgress?.({ done: i, total: ids.length, title: b.title, filled: filledN })
     try {
       const au = String(b.authors?.[0] || '')
       const sn = shop ? shop.surname(au) : au.split(' ').pop().toLowerCase()
@@ -1561,7 +1583,7 @@ export async function enrichShelfBooks(ids) {
         await new Promise((r) => setTimeout(r, 300))
       }
       const hit = good.find((h) => h.isbn13 && h.pages) || good.find((h) => h.isbn13) || good[0]
-      if (!hit) continue
+      if (!hit) { await updateBook(id, { titleTried: true }); continue }
       let meta = hit
       if (hit.isbn13) {
         try { meta = { ...hit, ...Object.fromEntries(Object.entries(await lookupIsbn(hit.isbn13)).filter(([, v]) => v)) } } catch { /* Treffer reicht */ }
@@ -1580,8 +1602,9 @@ export async function enrichShelfBooks(ids) {
           if (sc) ch.spineColor = sc
         }
       }
-      if (Object.keys(ch).length) await updateBook(id, ch)
+      if (Object.keys(ch).length) { await updateBook(id, ch); filledN++ } else await updateBook(id, { titleTried: true })
     } catch { /* nächstes Buch */ }
     await new Promise((r) => setTimeout(r, 350))
   }
+  return { filled: filledN }
 }

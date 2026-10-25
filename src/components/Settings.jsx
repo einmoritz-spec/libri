@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { loadRuntimes } from '../lib/audio'
-import { exportLibrary, importLibrary, importLinks, autoBackupBeforeImport, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
+import { exportLibrary, importLibrary, importLinks, autoBackupBeforeImport, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, enrichShopItems, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { parseBackupText } from '../lib/backupText'
 
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -103,6 +103,21 @@ export default function Settings({ notify, onOpenShop }) {
     }
   }
   const stopRef = useRef(false)
+  const [shopRun, setShopRun] = useState(null)
+  async function runShopData() {
+    stopRef.current = false
+    setShopRun({ running: true, done: 0, total: 0, filled: 0 })
+    try {
+      const r = await enrichShopItems({
+        online: true,
+        onProgress: (p) => setShopRun({ running: true, ...p }),
+        shouldStop: () => stopRef.current
+      })
+      setShopRun({ running: false, filled: r.filled, total: r.total })
+    } catch {
+      setShopRun({ running: false, failed: true })
+    }
+  }
 
   async function runBackfill() {
     stopRef.current = false
@@ -274,6 +289,17 @@ export default function Settings({ notify, onOpenShop }) {
               </p>
             )}
             <button className="btn" onClick={retryAll}>Erfolglose erneut versuchen</button>
+            {shopRun?.running ? (
+              <div className="setting-progress">
+                <span><span className="spinner" /> Shop-Daten {shopRun.done} von {shopRun.total} · {shopRun.filled} gefunden</span>
+                <button className="btn btn-quiet" onClick={() => { stopRef.current = true }}>Abbrechen</button>
+              </div>
+            ) : (
+              <button className="btn" onClick={runShopData}>Shop-ISBNs und Seitenzahlen suchen</button>
+            )}
+            {shopRun && !shopRun.running && (
+              <p className="setting-result">{shopRun.failed ? 'Das hat nicht geklappt.' : `${shopRun.filled} Shop-Bücher ergänzt`}</p>
+            )}
             {audioRun?.running ? (
               <div className="setting-progress">
                 <span><span className="spinner" /> Hörbuch-Zeiten {audioRun.done} von {audioRun.total} · {audioRun.filled} gefunden</span>
