@@ -2644,3 +2644,7 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .view-bar .view-toggle-icons { margin-left: auto; }
 .view-bar .view-toggle button { padding: 6px 11px; }
 .view-bar .view-toggle-icons button { padding: 0 10px; }
+.view-bar .view-toggle button { padding: 6px 9px; }
+.view-bar .view-toggle-icons button { padding: 0 8px; min-height: 32px; }
+.view-bar .view-toggle-icons svg { width: 16px; height: 16px; }
+.view-bar { gap: 6px; }
