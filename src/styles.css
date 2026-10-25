@@ -2642,3 +2642,5 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 
 .view-bar, .view-bar.has-kids { flex-wrap: wrap; row-gap: 8px; max-width: 100%; }
 .view-bar .view-toggle-icons { margin-left: auto; }
+.view-bar .view-toggle button { padding: 6px 11px; }
+.view-bar .view-toggle-icons button { padding: 0 10px; }

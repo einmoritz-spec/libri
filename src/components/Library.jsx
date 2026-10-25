@@ -456,7 +456,7 @@ export default function Library({ onOpen, onLongPress, onScan, onManual, onAddWi
           <button aria-pressed={view === 'all'} onClick={() => (view === 'all' && series !== 'all' ? setSeries('all') : setView('all'))}>Alle</button>
           {wishBooks.length > 0 && (
             <button aria-pressed={view === 'wish'} onClick={() => setView('wish')}>
-              Wunschliste {wishBooks.length}
+              Wunschliste
             </button>
           )}
           {kidsTabEnabled && (
