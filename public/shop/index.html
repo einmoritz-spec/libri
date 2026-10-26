@@ -234,6 +234,23 @@ button.auL{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--
 .add2{display:flex;gap:5px;margin-top:7px}.add2 .add{margin-top:0;flex:1}
 .foot{margin-top:40px;color:var(--muted);font-size:12px}
 @media (max-width:420px){.pd{grid-template-columns:88px 1fr;gap:12px}.hero h1{font-size:24px}}
+
+/* Übergänge: weich ein- und ausblenden statt hart umschalten */
+@keyframes vin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes fadei{from{opacity:0}to{opacity:1}}
+@keyframes sup{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes sdn{to{transform:translateY(40px);opacity:0}}
+@keyframes drin{from{transform:translateX(100%)}to{transform:none}}
+@keyframes drout{to{transform:translateX(100%)}}
+#main.vin{animation:vin .18s cubic-bezier(.2,.7,.3,1)}
+.scrim:not([hidden]){animation:fadei .2s ease}
+.scrim.out{animation:fadei .17s ease reverse forwards}
+.modal:not([hidden]) .mb{animation:sup .24s cubic-bezier(.2,.7,.3,1)}
+.modal.out .mb{animation:sdn .17s ease forwards}
+.drawer:not([hidden]){animation:drin .24s cubic-bezier(.2,.7,.3,1)}
+.drawer.out{animation:drout .17s ease forwards}
+.cv img,.pc-img img,.gapimg{animation:fadei .25s ease both}
+@media (prefers-reduced-motion:reduce){#main.vin,.scrim,.mb,.drawer,.cv img,.pc-img img,.gapimg{animation:none!important}}
 </style>
 
 </head><body><header class="hd full"><div class="hd-in">
@@ -572,6 +589,7 @@ async function gapFill(){for(const im of document.querySelectorAll('img[data-gi]
   for(const u of srcs({isbn:i})){if(await loadImg(u,60)){UPC['g'+i]=u;upSave();im.src=u;im.style.display='';break}}}}
 function render(keepScroll){
   navTrack();
+  {const m=$('#main');m.classList.remove('vin');void m.offsetWidth;m.classList.add('vin')}
   $('#main').innerHTML=S.view==='start'?startView():S.view==='series'?seriesView():shopView();
   $('#n-start').toggleAttribute('aria-current',S.view==='start');$('#n-shop').toggleAttribute('aria-current',S.view==='shop'||S.view==='series');
   document.querySelectorAll('.nav button').forEach(b=>{if(b.hasAttribute('aria-current'))b.setAttribute('aria-current','page')});
@@ -695,8 +713,11 @@ function drawCart(){
   $('#dl').innerHTML=items.length?warn+items.map(({p,m})=>`<div class="ci"><div>${cover(p)}</div><div><b>${esc(title(p))}</b><small>${esc(p.a)}<br>${esc(meta(p))} · <span class="md ${m}">${MN[m]}</span>${ORD.has(kk(p,m))?'<br><span class="was">Schon einmal bestellt</span>':''}${have(p)?`<br><span class="was">Hast du schon (${STL[stOf(p)][0].replace(' ✓','')})</span>`:''}</small></div><button class="rm" data-rm="${p.id}" data-m="${m}">Entfernen</button></div>`).join(''):'<div class="empty" style="margin:30px auto"><h3>Noch leer</h3><p>Lege Bücher in den Warenkorb, um daraus eine PDF-Bestellung zu erstellen.</p></div>';
   $('#order').textContent=items.length?`Bestellen (${items.length} Titel)`:'Bestellen';$('#order').disabled=!items.length;$('#clear').hidden=!items.length;
 }
-function openCart(){drawCart();$('#scrim').hidden=false;$('#drawer').hidden=false;document.body.style.overflow='hidden';$('#drawer .x').focus()}
-function closeAll(){$('#zoom').hidden=true;$('#drawer').hidden=true;$('#modal').hidden=true;$('#scrim').hidden=true;document.body.style.overflow=''}
+function openCart(){drawCart();$('#scrim').hidden=false;$('#scrim').classList.remove('out');$('#drawer').hidden=false;$('#drawer').classList.remove('out');document.body.style.overflow='hidden';$('#drawer .x').focus()}
+function closeAll(){$('#zoom').hidden=true;document.body.style.overflow='';
+  const els=['#drawer','#modal','#scrim'].map(x=>$(x)).filter(e=>e&&!e.hidden);
+  els.forEach(e=>e.classList.add('out'));
+  setTimeout(()=>els.forEach(e=>{if(e.classList.contains('out')){e.hidden=true;e.classList.remove('out')}}),170)}
 
 // ---------- Produkt ----------
 function similar(p){
@@ -731,8 +752,8 @@ function openProduct(id,keep){
    ${p.ds?`<p class="ds" id="ds">${esc(p.ds)}</p>${p.ds.length>230?'<button class="mre" data-more-ds="1">Mehr lesen</button>':''}`:''}
    ${more.length?`<div class="more-h">Mehr aus „${esc(serName(p.g,p.l))}“</div><div class="rail">${more.slice(0,16).map(x=>card(x)).join('')}</div>`:''}
    ${sim.length?`<div class="more-h">Ähnliche Bücher</div><div class="rail">${sim.map(x=>card(x)).join('')}</div>`:''}`;
-  if(!keep){$('#scrim').hidden=false;document.body.style.overflow='hidden'}
-  $('#modal').hidden=false;
+  if(!keep){$('#scrim').hidden=false;$('#scrim').classList.remove('out');document.body.style.overflow='hidden'}
+  $('#modal').hidden=false;$('#modal').classList.remove('out');
 }
 
 // ---------- Bestell-PDF ----------
@@ -781,7 +802,7 @@ function showDone(order,fresh){
   $('#mb').innerHTML=`${modalX()}<div class="done"><h3>${fresh?`Bestellung ${esc(order.no)} ist fertig`:`Bestellung ${esc(order.no)}`}</h3><p>${items.length} ${items.length===1?'Buch':'Bücher'}${order.who?' für '+esc(order.who):''}. Die PDF-Liste kannst du speichern oder direkt teilen.</p>
    <div class="acts"><button class="pri" id="pdf-save">PDF speichern</button><button class="sec" id="pdf-share">PDF teilen</button><a class="sec" href="${wa}" target="_blank" rel="noopener">Per WhatsApp (Text)</a></div>
    <div class="st" id="st" role="status"></div>${fresh?`<p class="wl" id="wl">${parent!==window?'Wird in Libri auf die Wunschliste gelegt …':'Wird beim nächsten Öffnen von Libri auf die Wunschliste gelegt.'}</p>`:''}</div>`;
-  $('#scrim').hidden=false;$('#modal').hidden=false;document.body.style.overflow='hidden';
+  $('#scrim').hidden=false;$('#scrim').classList.remove('out');$('#modal').hidden=false;$('#modal').classList.remove('out');document.body.style.overflow='hidden';
   try{lastOrder.doc=buildPdf(items,order.who,order.no,order.date);lastOrder.file=new File([lastOrder.doc.output('blob')],`Bestellung-${order.no}.pdf`,{type:'application/pdf'})}
   catch(e){$('#st').textContent='Die PDF konnte nicht erstellt werden (jsPDF lädt nur online). Nutze den WhatsApp-Text.'}
 }
@@ -804,7 +825,7 @@ function openHistory(){
    HIST.map((o,i)=>{const its=o.keys.map(ent).filter(Boolean);return `<div class="ho"><div class="ho-h"><b>${esc(o.no)}</b><span>${fmt(o.date)} · ${its.length} ${its.length===1?'Buch':'Bücher'}${o.who?' · '+esc(o.who):''}</span></div>
     <details><summary>Bücher anzeigen</summary><ul>${sortEnt(its).map(({p,m})=>`<li>${esc(title(p))} <span style="color:var(--muted)">(${esc(p.p)}) · ${MN[m]}</span></li>`).join('')}</ul></details>
     <div class="acts"><button class="sec" data-repdf="${i}">PDF</button><button class="sec" data-reorder="${i}">Wieder in den Warenkorb</button></div></div>`}).join('')+`</div>`;
-  $('#scrim').hidden=false;$('#modal').hidden=false;document.body.style.overflow='hidden';
+  $('#scrim').hidden=false;$('#scrim').classList.remove('out');$('#modal').hidden=false;$('#modal').classList.remove('out');document.body.style.overflow='hidden';
 }
 async function sharePdf(){
   const st=$('#st');if(!lastOrder||!lastOrder.file){st.textContent='PDF noch nicht bereit.';return}
