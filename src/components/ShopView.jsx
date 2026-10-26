@@ -64,9 +64,6 @@ export default function ShopView({ onClose }) {
       <div className="shop-bar">
         <button className="btn btn-quiet" onClick={() => (depth > 0 ? back() : onClose())}>‹ Zurück</button>
         <b>Shop</b>
-        <small style={{ marginLeft: 'auto', opacity: 0.55, fontSize: 11 }}>
-          App {new Date(__BUILD_TIME__).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-        </small>
       </div>
       {Array.from({ length: depth }, (_, i) => <ShopStep key={i} onBack={back} />)}
       {ready && <iframe ref={frame} className="shop-frame" title="Shop" src="./shop/index.html" allow="web-share; clipboard-write" />}
