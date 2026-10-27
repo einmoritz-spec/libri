@@ -124,7 +124,10 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
 
   const order = useMemo(() => orderBooks(all), [all])
   const visibleIds = useMemo(() => new Set(visible.map((b) => b.id)), [visible])
-  const shownOrder = useMemo(() => order.filter((b) => visibleIds.has(b.id)), [order, visibleIds])
+  const shownOrder = useMemo(
+    () => order.filter((b) => visibleIds.has(b.id) && (mode !== 'photo' || photos.has(b.id))),
+    [order, visibleIds, mode, photos]
+  )
 
   const items = useMemo(() => {
     if (!drag) return withSeparators(shownOrder)
@@ -250,6 +253,9 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
 
   return (
     <div className="sv" ref={wrapRef}>
+      {mode === 'photo' && !shownOrder.length && (
+        <p className="sv-empty">Noch keine Rücken fotografiert. Unter Mehr → Darstellung → Regal-Ansicht kannst du loslegen.</p>
+      )}
       <div className="sv-case">
       {rows.map((row, ri) => (
         <div className="sv-shelf" key={ri}>
