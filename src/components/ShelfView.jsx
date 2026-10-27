@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../lib/db'
+import { db, deleteSpinePhoto } from '../lib/db'
 import {
   orderBooks, packRows, withSeparators, saveOrder, spineWidth, spineHeight, photoHeight,
   gradientFromImage, gradientCss, fallbackGradient, queueSpineGrad
@@ -75,16 +75,17 @@ function Spine({ book, mode, photo, lifted, dragged, ...handlers }) {
   )
 }
 
-function Peek({ book, onOpen, onClose }) {
+function Peek({ book, onOpen, onClose, hasPhoto, onDeletePhoto }) {
   const src = useCoverSrc(book)
   return (
-    <div className="sv-peek">
+    <div className={`sv-peek${hasPhoto ? ' has-photo' : ''}`}>
       {src ? <img src={src} alt="" /> : <div className="sv-peek-blank" />}
       <div className="sv-peek-text">
         <b>{book.title}</b>
         <span>{(book.authors || []).join(', ')}{book.pages ? ` · ${book.pages} S.` : ''}</span>
       </div>
       <button className="btn btn-primary" onClick={() => onOpen(book)}>Öffnen</button>
+      {hasPhoto && <button className="btn" onClick={onDeletePhoto}>Foto löschen</button>}
       <button className="btn btn-quiet" onClick={onClose} aria-label="Schließen">✕</button>
     </div>
   )
@@ -292,7 +293,17 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
         </div>
       )}
 
-      {peek && !drag && <Peek book={peek} onOpen={onOpen} onClose={() => setPeek(null)} />}
+      {peek && !drag && <Peek
+          book={peek}
+          onOpen={onOpen}
+          onClose={() => setPeek(null)}
+          hasPhoto={mode === 'photo' && photos.has(peek.id)}
+          onDeletePhoto={async () => {
+            if (!window.confirm(`Rückenfoto von „${peek.title}“ löschen?`)) return
+            await deleteSpinePhoto(peek.id)
+            setPeek(null)
+          }}
+        />}
     </div>
   )
 }
