@@ -2720,3 +2720,10 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .sv-peek.has-photo .sv-peek-text { flex: 1 1 60%; }
 .sv-peek.has-photo .btn-quiet { order: 2; }
 .sv-peek.has-photo .btn:not(.btn-quiet) { flex: 1 1 40%; }
+.sc-toggle { position: absolute; left: 50%; transform: translateX(-50%); bottom: 350px; z-index: 6; display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: #0009; }
+.sc-toggle button { background: none; border: 0; color: #fff; padding: 7px 16px; border-radius: 999px; font-size: 13px; }
+.sc-toggle button[aria-pressed='true'] { background: var(--lamp, #c07d1b); font-weight: 600; }
+.sc-note { position: absolute; left: 0; right: 0; bottom: 392px; z-index: 6; text-align: center; font-size: 12px; opacity: .85; }
+.sc-review-main { bottom: 400px; }
+.sc-review-main { display: flex; align-items: center; justify-content: center; }
+.sc-review-main img { height: 100%; width: auto; max-width: 90%; max-height: none; object-fit: fill; }

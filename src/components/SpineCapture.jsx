@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, saveSpinePhoto, updateBook } from '../lib/db'
+import { detectQuad, warpQuad, enhance, canvasToBlob } from '../lib/spineScan'
 import { orderBooks, spineWidth, spineHeight, photoHeight } from '../lib/shelf'
 
 /* Buchrücken fotografieren: Vollbild-Kamera mit hochkantem, frei
@@ -100,7 +101,7 @@ export default function SpineCapture({ onClose }) {
     setFrame(suggest(book, { w: r.width, h: r.height }))
   }, [book?.id])
 
-  useEffect(() => () => { if (shot?.url) URL.revokeObjectURL(shot.url) }, [shot])
+  useEffect(() => () => { for (const v of [shot?.auto, shot?.plain]) if (v?.url) URL.revokeObjectURL(v.url) }, [shot])
   useEffect(() => () => { if (gallery) URL.revokeObjectURL(gallery) }, [gallery])
 
   const toggleTorch = async () => {
@@ -151,7 +152,7 @@ export default function SpineCapture({ onClose }) {
   }
 
   /* ── Aufnahme ── */
-  const capture = () => {
+  const capture = async () => {
     if (!frame || !boxRef.current) return
     const box = boxRef.current.getBoundingClientRect()
     const el = gallery ? imgRef.current : videoRef.current
@@ -171,10 +172,39 @@ export default function SpineCapture({ onClose }) {
     c.width = outW
     c.height = outH
     c.getContext('2d').drawImage(el, sx, sy, sw, sh, 0, 0, outW, outH)
-    c.toBlob((blob) => {
-      if (!blob) return
-      setShot({ blob, url: URL.createObjectURL(blob), aspect: frame.w / frame.h })
-    }, 'image/jpeg', 0.86)
+
+    // Größerer Ausschnitt um den Rahmen herum für die Kantensuche
+    const padX = frame.w * 0.5
+    const padY = frame.h * 0.12
+    const rx = Math.max(0, frame.x - padX)
+    const ry = Math.max(0, frame.y - padY)
+    const rw = Math.min(box.width, frame.x + frame.w + padX) - rx
+    const rh = Math.min(box.height, frame.y + frame.h + padY) - ry
+    const k = Math.min(1, 1100 / (rh / scale))
+    const rc = document.createElement('canvas')
+    rc.width = Math.max(8, Math.round((rw / scale) * k))
+    rc.height = Math.max(8, Math.round((rh / scale) * k))
+    rc.getContext('2d', { willReadFrequently: true }).drawImage(el, (rx + ox) / scale, (ry + oy) / scale, rw / scale, rh / scale, 0, 0, rc.width, rc.height)
+    const kk = rc.width / rw // Canvas-Pixel pro Bildschirmpixel
+    const inner = { x: (frame.x - rx) * kk, y: (frame.y - ry) * kk, w: frame.w * kk, h: frame.h * kk }
+
+    const plainBlob = await canvasToBlob(c, 0.86)
+    let auto = null
+    let found = 0
+    try {
+      const det = detectQuad(rc, inner)
+      found = det.found
+      // Ecken leicht nach innen, damit kein Rand vom Nachbarbuch mitkommt
+      const cx = det.quad.reduce((t, q) => t + q.x, 0) / 4
+      const cy = det.quad.reduce((t, q) => t + q.y, 0) / 4
+      const quad = det.quad.map((q) => ({ x: q.x + (cx - q.x) * 0.02, y: q.y + (cy - q.y) * 0.015 }))
+      const out = enhance(warpQuad(rc, quad, 560))
+      const blob = await canvasToBlob(out, 0.88)
+      if (blob) auto = { blob, url: URL.createObjectURL(blob), aspect: out.width / out.height }
+    } catch { /* bleibt beim Original */ }
+    if (!plainBlob) return
+    const plain = { blob: plainBlob, url: URL.createObjectURL(plainBlob), aspect: frame.w / frame.h }
+    setShot({ auto, plain, use: auto && found >= 2 ? 'auto' : 'plain', found })
   }
 
   const noPaper = async () => {
@@ -190,7 +220,8 @@ export default function SpineCapture({ onClose }) {
     if (!shot || !book || saving) return
     setSaving(true)
     try {
-      await saveSpinePhoto(book.id, shot.blob, shot.aspect)
+      const pick = shot[shot.use] || shot.plain
+      await saveSpinePhoto(book.id, pick.blob, pick.aspect)
       if (book.series && frame) lastFrame.set(book.series, { w: frame.w, h: frame.h })
       next()
     } finally { setSaving(false) }
@@ -291,28 +322,38 @@ export default function SpineCapture({ onClose }) {
           </>
         )}
 
-        {shot && book && (
-          <div className="sc-review">
-            <div className="sc-review-main">
-              <img src={shot.url} alt="" style={{ aspectRatio: shot.aspect }} />
-            </div>
-            <div className="sc-review-shelf">
-              <div className="sc-mini" style={{ width: 16, height: 96, background: '#5b3a2c' }} />
-              <div className="sc-mini" style={{ width: spineWidth(book), height: photoHeight(book, shot.aspect) }}>
-                <img src={shot.url} alt="" />
+        {shot && book && (() => {
+          const cur = shot[shot.use] || shot.plain
+          return (
+            <div className="sc-review">
+              <div className="sc-review-main">
+                <img src={cur.url} alt="" style={{ aspectRatio: cur.aspect }} />
               </div>
-              <div className="sc-mini" style={{ width: 22, height: 96, background: '#2f4a3f' }} />
-              <div className="sc-board" />
+              {shot.auto && (
+                <div className="sc-toggle" role="group" aria-label="Bildvariante">
+                  <button aria-pressed={shot.use === 'auto'} onClick={() => setShot({ ...shot, use: 'auto' })}>Begradigt</button>
+                  <button aria-pressed={shot.use === 'plain'} onClick={() => setShot({ ...shot, use: 'plain' })}>Original</button>
+                </div>
+              )}
+              {shot.found < 2 && <div className="sc-note">Kanten schwer erkennbar, Original ist vorausgewählt.</div>}
+              <div className="sc-review-shelf">
+                <div className="sc-mini" style={{ width: 16, height: 96, background: '#5b3a2c' }} />
+                <div className="sc-mini" style={{ width: spineWidth(book), height: photoHeight(book, cur.aspect) }}>
+                  <img src={cur.url} alt="" />
+                </div>
+                <div className="sc-mini" style={{ width: 22, height: 96, background: '#2f4a3f' }} />
+                <div className="sc-board" />
+              </div>
+              <div className="sc-bar">
+                <button className="sc-side" onClick={() => setShot(null)}><u>↺</u>Neu</button>
+                <button className="sc-shut sc-ok" onClick={confirm} aria-label="Übernehmen" disabled={saving}>
+                  <i>✓</i>
+                </button>
+                <span className="sc-side" />
+              </div>
             </div>
-            <div className="sc-bar">
-              <button className="sc-side" onClick={() => setShot(null)}><u>↺</u>Neu</button>
-              <button className="sc-shut sc-ok" onClick={confirm} aria-label="Übernehmen" disabled={saving}>
-                <i>✓</i>
-              </button>
-              <span className="sc-side" />
-            </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickGallery} />
     </div>
