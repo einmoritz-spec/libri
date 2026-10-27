@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { db, saveSpinePhoto } from '../lib/db'
+import { db, saveSpinePhoto, updateBook } from '../lib/db'
 import { orderBooks, spineWidth, spineHeight, photoHeight } from '../lib/shelf'
 
 /* Buchrücken fotografieren: Vollbild-Kamera mit hochkantem, frei
@@ -10,10 +10,14 @@ const MIN_W = 26
 const MIN_H = 80
 const lastFrame = new Map() // Reihe/Buch → zuletzt benutzte Rahmengröße (nur diese Sitzung)
 
-/** Nur Papierbücher kommen dran; reine eBooks haben keinen echten Rücken. */
+const KIDS_TAGS = ['Bilderbuch', 'Kinderbuch', 'Kindersachbuch']
+
+/** Ob ein Buch real im Regal steht, weiß die App nicht (eBooks und Papier sind
+    gleich eingetragen) — deshalb kommen alle Bücher dran, außer Wunschliste,
+    Bilderbücher und was von Hand als „nicht als Buch vorhanden“ markiert wurde. */
 export function needsSpinePhoto(b) {
-  if (b.status === 'wishlist') return false
-  return !(b.files?.length > 0 && b.format !== 'print')
+  if (b.status === 'wishlist' || b.noSpine) return false
+  return !(b.tags || []).some((t) => KIDS_TAGS.includes(t))
 }
 
 function suggest(book, box, aspect) {
@@ -173,6 +177,11 @@ export default function SpineCapture({ onClose }) {
     }, 'image/jpeg', 0.86)
   }
 
+  const noPaper = async () => {
+    if (!book) return
+    await updateBook(book.id, { noSpine: true })
+    next()
+  }
   const next = () => {
     setShot(null)
     setPos((p) => p + 1)
@@ -265,7 +274,10 @@ export default function SpineCapture({ onClose }) {
           <>
             <div className="sc-help">
               Rücken in den Rahmen legen · Kanten ziehen zum Anpassen
-              <button className="sc-link" onClick={resetFrame}>Zurücksetzen</button>
+              <span>
+                <button className="sc-link" onClick={resetFrame}>Rahmen zurücksetzen</button>
+                <button className="sc-link" onClick={noPaper}>Nicht als Buch vorhanden</button>
+              </span>
             </div>
             <div className="sc-bar">
               <button className="sc-side" onClick={() => setPos((p) => Math.max(0, p - 1))} disabled={pos === 0}>

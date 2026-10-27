@@ -279,7 +279,7 @@ export default function Settings({ notify, onOpenShop }) {
               <button className="btn btn-primary" onClick={() => setCapture(true)}>
                 {spineStat.done ? 'Weiter fotografieren' : 'Rücken fotografieren'}
               </button>
-              <small className="seg3-hint">Reine eBooks werden übersprungen.</small>
+              <small className="seg3-hint">Bücher, die du nicht als Buch besitzt, markierst du beim Fotografieren mit „Nicht als Buch vorhanden“. Dann tauchen sie nicht mehr auf.</small>
             </div>
           )}
         </div>
