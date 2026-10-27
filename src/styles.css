@@ -2727,3 +2727,8 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .sc-review-main { bottom: 400px; }
 .sc-review-main { display: flex; align-items: center; justify-content: center; }
 .sc-review-main img { height: 100%; width: auto; max-width: 90%; max-height: none; object-fit: fill; }
+.sc-quad { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.sc-quad polygon { fill: rgba(255,255,255,.08); stroke: #fff; stroke-width: 2; stroke-dasharray: 5 4; }
+.sc-quad circle { fill: #fff; stroke: #0007; stroke-width: 1; }
+.sc-quad polygon.ok { fill: rgba(192,125,27,.22); stroke: var(--lamp, #c07d1b); stroke-dasharray: none; stroke-width: 2.5; }
+.sc-quad circle.ok { fill: var(--lamp, #c07d1b); stroke: #fff; stroke-width: 1.5; }
