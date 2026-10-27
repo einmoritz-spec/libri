@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import { db } from '../lib/db'
 import {
-  orderBooks, packRows, withSeparators, saveOrder, spineWidth, spineHeight,
+  orderBooks, packRows, withSeparators, saveOrder, spineWidth, spineHeight, photoHeight,
   gradientFromImage, gradientCss, fallbackGradient, queueSpineGrad
 } from '../lib/shelf'
 import { useCoverSrc, EmptyBookIcon } from './ui'
@@ -23,12 +25,12 @@ function EbookIcon() {
   )
 }
 
-function Spine({ book, mode, lifted, dragged, ...handlers }) {
+function Spine({ book, mode, photo, lifted, dragged, ...handlers }) {
   const src = useCoverSrc(book)
   const [grad, setGrad] = useState(() => book.spineGrad || memGrad.get(book.id) || null)
 
   useEffect(() => {
-    if (mode !== 'gradient') return
+    if (mode !== 'gradient' && mode !== 'photo') return
     if (book.spineGrad) { setGrad(book.spineGrad); return }
     if (memGrad.has(book.id)) { setGrad(memGrad.get(book.id)); return }
     if (!src) return
@@ -51,9 +53,12 @@ function Spine({ book, mode, lifted, dragged, ...handlers }) {
   else if (mode === 'gradient' && grad) background = gradientCss(grad)
 
   // Im Cover-Modus bleibt der Rücken sauber: nur das Bild, Beschriftung und Symbole nur ohne Cover.
-  const bare = mode === 'cover' && Boolean(src)
+  const usePhoto = mode === 'photo' && photo
+  if (usePhoto) background = `url("${photo.url}") center / 100% 100% no-repeat, ${background}`
+  else if (mode === 'photo' && grad) background = gradientCss(grad)
+  const bare = (mode === 'cover' && Boolean(src)) || usePhoto
   const w = spineWidth(book)
-  const h = spineHeight(book)
+  const h = usePhoto ? photoHeight(book, photo.aspect) : spineHeight(book)
   return (
     <div
       className={`sp${lifted ? ' lifted' : ''}${dragged ? ' dragged' : ''}${book.status === 'reading' ? ' reading' : ''}`}
@@ -107,6 +112,15 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
     setWidth(Math.max(200, el.clientWidth - 8))
     return () => ro.disconnect()
   }, [])
+
+  // Eigene Rückenfotos (nur im Foto-Modus): Bild-URL + Seitenverhältnis je Buch
+  const spineRows = useLiveQuery(() => (mode === 'photo' ? db.spines.toArray() : []), [mode], [])
+  const photos = useMemo(() => {
+    const m = new Map()
+    for (const r of spineRows || []) if (r.blob) m.set(r.bookId, { url: URL.createObjectURL(r.blob), aspect: r.aspect || 0.2 })
+    return m
+  }, [spineRows])
+  useEffect(() => () => { for (const p of photos.values()) URL.revokeObjectURL(p.url) }, [photos])
 
   const order = useMemo(() => orderBooks(all), [all])
   const visibleIds = useMemo(() => new Set(visible.map((b) => b.id)), [visible])
@@ -250,6 +264,7 @@ export default function ShelfView({ all, visible, mode, onOpen, locked: lockedPr
                   key={it.id}
                   book={it}
                   mode={mode}
+                  photo={photos.get(it.id)}
                   lifted={peek?.id === it.id}
                   onPointerDown={(e) => onDown(e, it)}
                   onPointerMove={onMove}

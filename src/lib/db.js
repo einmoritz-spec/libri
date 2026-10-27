@@ -107,6 +107,25 @@ db.version(5).stores({
   shopMeta: 'key'
 })
 
+/* Version 6: eigene Fotos der Buchrücken fürs Regal (ein Eintrag pro Buch:
+   Bild als Blob plus Seitenverhältnis des Ausschnitts). */
+db.version(6).stores({
+  books: '++id, isbn13, title, status, addedAt, finishedAt, language, rating, year',
+  sessions: '++id, bookId, date',
+  covers: 'bookId',
+  notes: '++id, bookId, createdAt',
+  shopMeta: 'key',
+  spines: 'bookId'
+})
+
+/** Spine-Foto speichern / holen / löschen. */
+export async function saveSpinePhoto(bookId, blob, aspect) {
+  await db.spines.put({ bookId, blob, aspect, at: Date.now() })
+}
+export async function deleteSpinePhoto(bookId) {
+  await db.spines.delete(bookId)
+}
+
 /* Öffnungszustand der Datenbank.
    Ohne das hier wartet eine Abfrage im Fehlerfall endlos — und der Bildschirm
    bleibt für immer im Ladezustand hängen, ohne dass irgendwo steht, warum. */
@@ -313,6 +332,7 @@ export async function deleteBook(id) {
   await db.sessions.where('bookId').equals(id).delete()
   await db.notes.where('bookId').equals(id).delete()
   await db.covers.delete(id)
+  await db.spines.delete(id)
   invalidateCover(id)
   return db.books.delete(id)
 }
@@ -464,6 +484,14 @@ async function dataUrlToBlob(dataUrl) {
   }
 }
 
+async function exportSpines() {
+  const out = []
+  for (const r of await db.spines.toArray()) {
+    if (r.blob) out.push({ bookId: r.bookId, aspect: r.aspect, data: await blobToDataUrl(r.blob) })
+  }
+  return out
+}
+
 export async function exportLibrary() {
   const books = await db.books.toArray()
   const sessions = await db.sessions.toArray()
@@ -486,6 +514,7 @@ export async function exportLibrary() {
     books: serialised,
     sessions,
     notes: await db.notes.toArray(),
+    spines: await exportSpines(),
     shop: await exportShop()
   }
 }
@@ -631,6 +660,7 @@ export async function importLibrary(payload, { replace = false } = {}) {
     await db.books.clear()
     await db.sessions.clear()
     await db.covers.clear()
+    await db.spines.clear()
     await db.notes.clear()
     await db.shopMeta.clear()
   }
@@ -694,6 +724,13 @@ export async function importLibrary(payload, { replace = false } = {}) {
     if (have.some((x) => x.date === rest.date && x.at === rest.at && x.pages === rest.pages)) continue
     await db.sessions.add({ ...rest, bookId })
     sessionsAdded++
+  }
+
+  for (const sp of payload.spines || []) {
+    const bookId = idMap.get(sp.bookId)
+    if (!bookId || !sp.data || (await db.spines.get(bookId))) continue
+    const blob = await dataUrlToBlob(sp.data)
+    if (blob) await db.spines.put({ bookId, blob, aspect: sp.aspect, at: Date.now() })
   }
 
   await importShop(payload.shop)

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveQuery } from 'dexie-react-hooks'
+import SpineCapture, { needsSpinePhoto } from './SpineCapture'
 import { loadRuntimes } from '../lib/audio'
 import { exportLibrary, importLibrary, importLinks, autoBackupBeforeImport, getDiag, markBackupDone, daysSinceBackup, db, backfillCovers, enrichShopItems, resetEnrichTried, resetShopTried, removeDuplicateEntries, trimAllCovers } from '../lib/db'
 import { parseBackupText } from '../lib/backupText'
@@ -62,6 +64,13 @@ export default function Settings({ notify, onOpenShop }) {
     setShelfModeState(m)
     localStorage.setItem('libri:shelfMode', m)
   }
+
+  const [capture, setCapture] = useState(false)
+  const spineStat = useLiveQuery(async () => {
+    const books = (await db.books.toArray()).filter(needsSpinePhoto)
+    const have = new Set(await db.spines.toCollection().primaryKeys())
+    return { total: books.length, done: books.filter((b) => have.has(b.id)).length }
+  }, [capture], { total: 0, done: 0 })
 
   const [upNext, setUpNextState] = useState(
     () => localStorage.getItem('libri:upNext') === '1'
@@ -251,14 +260,28 @@ export default function Settings({ notify, onOpenShop }) {
             <small>
               {shelfMode === 'gradient' ? 'Rückenfarben als weicher Verlauf aus dem Cover.'
                 : shelfMode === 'cover' ? 'Linker Cover-Rand als Rücken, in Originalpixeln.'
+                  : shelfMode === 'photo' ? 'Deine eigenen Fotos der Buchrücken; ohne Foto der Verlauf.'
                   : 'Bücher als Rücken im Regal, frei umsortierbar.'}
             </small>
           </div>
           <div className="seg3" role="group" aria-label="Regal-Ansicht">
-            {[['off', 'Aus'], ['gradient', 'Verlauf'], ['cover', 'Cover']].map(([k, l]) => (
+            {[['off', 'Aus'], ['gradient', 'Verlauf'], ['cover', 'Cover'], ['photo', 'Foto']].map(([k, l]) => (
               <button key={k} aria-pressed={shelfMode === k} onClick={() => setShelfMode(k)}>{l}</button>
             ))}
           </div>
+          {shelfMode === 'photo' && (
+            <div className="sc-set">
+              <div className="sc-set-row">
+                <span><b>{spineStat.done}</b> von {spineStat.total} Rücken fotografiert</span>
+                <span>{spineStat.total - spineStat.done} offen</span>
+              </div>
+              <div className="sc-prog"><i style={{ width: `${spineStat.total ? (100 * spineStat.done) / spineStat.total : 0}%` }} /></div>
+              <button className="btn btn-primary" onClick={() => setCapture(true)}>
+                {spineStat.done ? 'Weiter fotografieren' : 'Rücken fotografieren'}
+              </button>
+              <small className="seg3-hint">Reine eBooks werden übersprungen.</small>
+            </div>
+          )}
         </div>
         <Row label="Bilderbücher-Reiter">
           <OnOff on={kidsTab} set={setKidsTab} />
@@ -330,6 +353,7 @@ export default function Settings({ notify, onOpenShop }) {
           Maas-Bücher: {fdiag.maasOwned} in der Bibliothek ({fdiag.maas} gesamt) · versteckter Shop: {fdiag.flag}
         </p>
       )}
+      {capture && <SpineCapture onClose={() => setCapture(false)} />}
     </div>
   )
 }

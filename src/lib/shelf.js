@@ -18,7 +18,7 @@ export function colorFromText(str) {
   return `hsl(${hue} 38% 33%)`
 }
 
-export const SHELF_MODES = ['off', 'gradient', 'cover']
+export const SHELF_MODES = ['off', 'gradient', 'cover', 'photo']
 export function getShelfMode() {
   const m = localStorage.getItem('libri:shelfMode')
   return SHELF_MODES.includes(m) ? m : 'off'
@@ -30,6 +30,12 @@ export function getShelfMode() {
 export function spineWidth(book) {
   const pages = book.pages || book.ebookPages || 350
   return Math.round(Math.min(44, Math.max(12, (10 + pages * 0.04) * 0.74)))
+}
+
+/** Mit eigenem Foto bestimmt dessen Seitenverhältnis (Rahmen beim Fotografieren)
+    die Höhe; die Dicke bleibt aus der Seitenzahl. */
+export function photoHeight(book, aspect) {
+  return Math.round(Math.max(100, Math.min(190, spineWidth(book) / aspect)))
 }
 
 export const BINDINGS = [['hard', 'Hardcover'], ['soft', 'Taschenbuch'], ['small', 'Kleinformat']]
