@@ -7,6 +7,8 @@ import { orderBooks, spineWidth, spineHeight, photoHeight } from '../lib/shelf'
    anpassbarem Rahmen. Die Bücher werden nacheinander abgearbeitet; bei jedem
    gilt: Rahmen einstellen → Auslöser → prüfen → Haken. */
 
+const BOTTOM_RESERVE = 215 // Platz unter dem Rahmen (Auslöser, Links, Griffe)
+const TOP_RESERVE = 100
 const MIN_W = 26
 const MIN_H = 80
 const lastFrame = new Map() // Reihe/Buch → zuletzt benutzte Rahmengröße (nur diese Sitzung)
@@ -27,9 +29,9 @@ function suggest(book, box, aspect) {
   const prev = key && lastFrame.get(key)
   let h = prev ? prev.h : box.h * 0.56
   let w = prev ? prev.w : h * a
-  h = Math.min(h, box.h * 0.8)
+  h = Math.min(h, box.h * 0.8, box.h - BOTTOM_RESERVE - TOP_RESERVE - 20)
   w = Math.max(MIN_W, Math.min(w, box.w * 0.8))
-  return { x: (box.w - w) / 2, y: Math.max(130, (box.h - h) / 2 - 30), w, h }
+  return { x: (box.w - w) / 2, y: Math.max(TOP_RESERVE + 20, Math.min((box.h - h) / 2 - 30, box.h - BOTTOM_RESERVE - h)), w, h }
 }
 
 export default function SpineCapture({ onClose }) {
@@ -136,10 +138,12 @@ export default function SpineCapture({ onClose }) {
       if (k.includes('n')) { const ny = Math.min(y + dy, y + h - MIN_H); h = h + (y - ny); y = ny }
       if (k.includes('s')) h = Math.max(MIN_H, h + dy)
     }
+    // Unten bleibt Platz für Auslöser und Links, damit die Griffe erreichbar bleiben
+    const maxBottom = box.height - BOTTOM_RESERVE
     x = Math.max(0, Math.min(x, box.width - w))
-    y = Math.max(0, Math.min(y, box.height - h))
+    y = Math.max(TOP_RESERVE, Math.min(y, maxBottom - h))
     w = Math.min(w, box.width - x)
-    h = Math.min(h, box.height - y)
+    h = Math.min(h, maxBottom - y)
     setFrame({ x, y, w, h })
   }
   const endDrag = () => { dragRef.current = null }
@@ -275,13 +279,10 @@ export default function SpineCapture({ onClose }) {
         {queue && !finished && live && !shot && (
           <>
             <div className="sc-help">
-              Rücken in den Rahmen legen · Kanten ziehen zum Anpassen
-              <span>
-                <button className="sc-link" onClick={resetFrame}>Rahmen zurücksetzen</button>
-                <button className="sc-link" onClick={noPaper}>Nicht als Buch vorhanden</button>
-              </span>
+              <button className="sc-link" onClick={resetFrame}>Rahmen zurücksetzen</button>
+              <button className="sc-link" onClick={noPaper}>Nicht als Buch vorhanden</button>
             </div>
-            <div className="sc-bar">
+            <div className="sc-bar sc-bar-live">
               <button className="sc-side" onClick={() => setPos((p) => Math.max(0, p - 1))} disabled={pos === 0}>
                 <u>‹</u>Zurück
               </button>

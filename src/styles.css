@@ -2733,3 +2733,6 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
 .sc-quad polygon.ok { fill: rgba(192,125,27,.22); stroke: var(--lamp, #c07d1b); stroke-dasharray: none; stroke-width: 2.5; }
 .sc-quad circle.ok { fill: var(--lamp, #c07d1b); stroke: #fff; stroke-width: 1.5; }
 .sc-review-main { bottom: 270px; }
+
+.sc-help { bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); display: flex; gap: 14px; justify-content: center; }
+.sc-bar-live { bottom: calc(env(safe-area-inset-bottom, 0px) + 36px); height: 116px; padding-bottom: 0; background: none; }
