@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, saveSpinePhoto, updateBook } from '../lib/db'
-import { detectQuad, warpQuad, enhance, canvasToBlob } from '../lib/spineScan'
+import { enhance, canvasToBlob } from '../lib/spineScan'
 import { orderBooks, spineWidth, spineHeight, photoHeight } from '../lib/shelf'
 
 /* Buchrücken fotografieren: Vollbild-Kamera mit hochkantem, frei
@@ -48,8 +48,6 @@ export default function SpineCapture({ onClose }) {
   const [frame, setFrame] = useState(null)
   const [shot, setShot] = useState(null) // { blob, url, aspect }
   const [saving, setSaving] = useState(false)
-  const [auto, setAuto] = useState(null) // { pts: [{x,y}×4], found } in Bildschirmkoordinaten
-  const smooth = useRef(null)
   const fileRef = useRef(null)
 
   // Warteschlange: Papierbücher ohne Foto in Regalreihenfolge
@@ -95,9 +93,6 @@ export default function SpineCapture({ onClose }) {
   }, [])
 
   const book = queue && queue[pos]
-  const finished0 = () => !queue || pos >= queue.length
-  const frameRef = useRef(null)
-  frameRef.current = frame
 
   // Rahmen für das aktuelle Buch vorschlagen
   useEffect(() => {
@@ -106,51 +101,8 @@ export default function SpineCapture({ onClose }) {
     setFrame(suggest(book, { w: r.width, h: r.height }))
   }, [book?.id])
 
-  useEffect(() => () => { for (const v of [shot?.auto, shot?.plain]) if (v?.url) URL.revokeObjectURL(v.url) }, [shot])
+  useEffect(() => () => { if (shot?.url) URL.revokeObjectURL(shot.url) }, [shot])
   useEffect(() => () => { if (gallery) URL.revokeObjectURL(gallery) }, [gallery])
-
-  // Live-Erkennung der Ecken (wie bei Dokumenten-Scannern), ein paar Mal pro Sekunde
-  useEffect(() => {
-    if (shot || finished0() || !frame || !boxRef.current) { setAuto(null); smooth.current = null; return }
-    let stop = false
-    let timer = 0
-    const work = document.createElement('canvas')
-    const tick = () => {
-      if (stop) return
-      try {
-        const el = gallery ? imgRef.current : videoRef.current
-        const vw = gallery ? el?.naturalWidth : el?.videoWidth
-        const vh = gallery ? el?.naturalHeight : el?.videoHeight
-        const box = boxRef.current?.getBoundingClientRect()
-        const f = frameRef.current
-        if (el && vw && vh && box && f && !dragRef.current) {
-          const scale = Math.max(box.width / vw, box.height / vh)
-          const ox = (vw * scale - box.width) / 2
-          const oy = (vh * scale - box.height) / 2
-          const padX = f.w * 0.5
-          const padY = f.h * 0.12
-          const rx = Math.max(0, f.x - padX)
-          const ry = Math.max(0, f.y - padY)
-          const rw = Math.min(box.width, f.x + f.w + padX) - rx
-          const rh = Math.min(box.height, f.y + f.h + padY) - ry
-          const kk = 300 / rh
-          work.height = 300
-          work.width = Math.max(8, Math.round(rw * kk))
-          const ctx = work.getContext('2d', { willReadFrequently: true })
-          ctx.drawImage(el, (rx + ox) / scale, (ry + oy) / scale, rw / scale, rh / scale, 0, 0, work.width, work.height)
-          const det = detectQuad(work, { x: (f.x - rx) * kk, y: (f.y - ry) * kk, w: f.w * kk, h: f.h * kk })
-          let pts = det.quad.map((q) => ({ x: rx + q.x / kk, y: ry + q.y / kk }))
-          const prev = smooth.current
-          if (prev && prev.length === 4) pts = pts.map((q, i) => ({ x: prev[i].x * 0.6 + q.x * 0.4, y: prev[i].y * 0.6 + q.y * 0.4 }))
-          smooth.current = pts
-          setAuto({ pts, found: det.found })
-        }
-      } catch { /* nächster Versuch */ }
-      timer = setTimeout(tick, 220)
-    }
-    tick()
-    return () => { stop = true; clearTimeout(timer) }
-  }, [shot, !!frame, gallery, book?.id, queue && pos >= queue.length])
 
   const toggleTorch = async () => {
     const t = streamRef.current?.getVideoTracks()[0]
@@ -221,38 +173,10 @@ export default function SpineCapture({ onClose }) {
     c.height = outH
     c.getContext('2d').drawImage(el, sx, sy, sw, sh, 0, 0, outW, outH)
 
-    // Größerer Ausschnitt um den Rahmen herum für die Kantensuche
-    const padX = frame.w * 0.5
-    const padY = frame.h * 0.12
-    const rx = Math.max(0, frame.x - padX)
-    const ry = Math.max(0, frame.y - padY)
-    const rw = Math.min(box.width, frame.x + frame.w + padX) - rx
-    const rh = Math.min(box.height, frame.y + frame.h + padY) - ry
-    const k = Math.min(1, 1100 / (rh / scale))
-    const rc = document.createElement('canvas')
-    rc.width = Math.max(8, Math.round((rw / scale) * k))
-    rc.height = Math.max(8, Math.round((rh / scale) * k))
-    rc.getContext('2d', { willReadFrequently: true }).drawImage(el, (rx + ox) / scale, (ry + oy) / scale, rw / scale, rh / scale, 0, 0, rc.width, rc.height)
-    const kk = rc.width / rw // Canvas-Pixel pro Bildschirmpixel
-    const inner = { x: (frame.x - rx) * kk, y: (frame.y - ry) * kk, w: frame.w * kk, h: frame.h * kk }
-
-    const plainBlob = await canvasToBlob(c, 0.86)
-    let auto = null
-    let found = 0
-    try {
-      const det = detectQuad(rc, inner)
-      found = det.found
-      // Ecken leicht nach innen, damit kein Rand vom Nachbarbuch mitkommt
-      const cx = det.quad.reduce((t, q) => t + q.x, 0) / 4
-      const cy = det.quad.reduce((t, q) => t + q.y, 0) / 4
-      const quad = det.quad.map((q) => ({ x: q.x + (cx - q.x) * 0.02, y: q.y + (cy - q.y) * 0.015 }))
-      const out = enhance(warpQuad(rc, quad, 560))
-      const blob = await canvasToBlob(out, 0.88)
-      if (blob) auto = { blob, url: URL.createObjectURL(blob), aspect: out.width / out.height }
-    } catch { /* bleibt beim Original */ }
-    if (!plainBlob) return
-    const plain = { blob: plainBlob, url: URL.createObjectURL(plainBlob), aspect: frame.w / frame.h }
-    setShot({ auto, plain, use: auto && found >= 2 ? 'auto' : 'plain', found })
+    enhance(c)
+    const blob = await canvasToBlob(c, 0.88)
+    if (!blob) return
+    setShot({ blob, url: URL.createObjectURL(blob), aspect: frame.w / frame.h })
   }
 
   const noPaper = async () => {
@@ -268,8 +192,7 @@ export default function SpineCapture({ onClose }) {
     if (!shot || !book || saving) return
     setSaving(true)
     try {
-      const pick = shot[shot.use] || shot.plain
-      await saveSpinePhoto(book.id, pick.blob, pick.aspect)
+      await saveSpinePhoto(book.id, shot.blob, shot.aspect)
       if (book.series && frame) lastFrame.set(book.series, { w: frame.w, h: frame.h })
       next()
     } finally { setSaving(false) }
@@ -313,13 +236,6 @@ export default function SpineCapture({ onClose }) {
               ><i /></span>
             ))}
           </div>
-        )}
-
-        {auto && !shot && queue && !finished && (
-          <svg className="sc-quad" width="100%" height="100%" aria-hidden="true">
-            <polygon points={auto.pts.map((p) => `${p.x},${p.y}`).join(' ')} className={auto.found >= 3 ? 'ok' : ''} />
-            {auto.pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" className={auto.found >= 3 ? 'ok' : ''} />)}
-          </svg>
         )}
 
         <div className="sc-head">
@@ -377,38 +293,28 @@ export default function SpineCapture({ onClose }) {
           </>
         )}
 
-        {shot && book && (() => {
-          const cur = shot[shot.use] || shot.plain
-          return (
-            <div className="sc-review">
-              <div className="sc-review-main">
-                <img src={cur.url} alt="" style={{ aspectRatio: cur.aspect }} />
-              </div>
-              {shot.auto && (
-                <div className="sc-toggle" role="group" aria-label="Bildvariante">
-                  <button aria-pressed={shot.use === 'auto'} onClick={() => setShot({ ...shot, use: 'auto' })}>Begradigt</button>
-                  <button aria-pressed={shot.use === 'plain'} onClick={() => setShot({ ...shot, use: 'plain' })}>Original</button>
-                </div>
-              )}
-              {shot.found < 2 && <div className="sc-note">Kanten schwer erkennbar, Original ist vorausgewählt.</div>}
-              <div className="sc-review-shelf">
-                <div className="sc-mini" style={{ width: 16, height: 96, background: '#5b3a2c' }} />
-                <div className="sc-mini" style={{ width: spineWidth(book), height: photoHeight(book, cur.aspect) }}>
-                  <img src={cur.url} alt="" />
-                </div>
-                <div className="sc-mini" style={{ width: 22, height: 96, background: '#2f4a3f' }} />
-                <div className="sc-board" />
-              </div>
-              <div className="sc-bar">
-                <button className="sc-side" onClick={() => setShot(null)}><u>↺</u>Neu</button>
-                <button className="sc-shut sc-ok" onClick={confirm} aria-label="Übernehmen" disabled={saving}>
-                  <i>✓</i>
-                </button>
-                <span className="sc-side" />
-              </div>
+        {shot && book && (
+          <div className="sc-review">
+            <div className="sc-review-main">
+              <img src={shot.url} alt="" style={{ aspectRatio: shot.aspect }} />
             </div>
-          )
-        })()}
+            <div className="sc-review-shelf">
+              <div className="sc-mini" style={{ width: 16, height: 96, background: '#5b3a2c' }} />
+              <div className="sc-mini" style={{ width: spineWidth(book), height: photoHeight(book, shot.aspect) }}>
+                <img src={shot.url} alt="" />
+              </div>
+              <div className="sc-mini" style={{ width: 22, height: 96, background: '#2f4a3f' }} />
+              <div className="sc-board" />
+            </div>
+            <div className="sc-bar">
+              <button className="sc-side" onClick={() => setShot(null)}><u>↺</u>Neu</button>
+              <button className="sc-shut sc-ok" onClick={confirm} aria-label="Übernehmen" disabled={saving}>
+                <i>✓</i>
+              </button>
+              <span className="sc-side" />
+            </div>
+          </div>
+        )}
       </div>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={pickGallery} />
     </div>
