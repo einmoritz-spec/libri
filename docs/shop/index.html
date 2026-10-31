@@ -104,6 +104,7 @@ button{cursor:pointer}
 .lay{margin-top:14px}
 .frow{display:flex;align-items:center;gap:0;margin-top:12px;flex-wrap:wrap}.frow .cnt{margin-left:auto;font-size:13px;color:var(--muted);padding-left:10px}.frow .nbtn{margin-left:6px}
 .nbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;margin-left:6px}
+.rbtn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:36px;margin-left:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;color:var(--muted)}.rbtn:active{background:var(--soft);color:var(--accent)}
 .nbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent)}
 .fbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600}
 @media (min-width:900px){.fbtn{display:none}}
@@ -504,7 +505,7 @@ function shopView(){
     body=`${dymH}<div class="grid">${shown.map(p=>card(p)).join('')}</div>${L.length>S.limit?`<button class="more" data-more="1">Mehr laden (${L.length-S.limit})</button>`:''}`;
   }
   return `<div style="margin-top:14px">${toggle}</div>
-   <div class="frow"><button class="fbtn" data-fopen="1" aria-expanded="${S.fopen}">Filter${n?' · '+n:''}</button><button class="nbtn" data-newest="1" aria-pressed="${S.sort==='new'}">Neueste</button><span class="cnt">${cnt}</span></div>
+   <div class="frow"><button class="fbtn" data-fopen="1" aria-expanded="${S.fopen}">Filter${n?' · '+n:''}</button><button class="nbtn" data-newest="1" aria-pressed="${S.sort==='new'}">Neu</button><button class="rbtn" data-reset="1" aria-label="Alle Filter zurücksetzen" title="Zurücksetzen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><span class="cnt">${cnt}</span></div>
    <div class="lay">${filterPanel()}<div>${body}</div></div>`;
 }
 function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[1]):g}
@@ -901,7 +902,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-fmore]')){S.fmore=!S.fmore;render(true);return}
   if(t.closest('[data-fopen]')){S.fopen=!S.fopen;render(true);return}
   if(t.closest('[data-more]')){S.limit+=48;render(true);return}
-  if(t.closest('[data-reset]')){Object.assign(S,{med:'',q:'',lang:'',genre:'',author:'',series:'',fmt:'',rd:'',cmp:'',len:''});$('#q').value='';S.limit=48;render(true);return}
+  if(t.closest('[data-reset]')){Object.assign(S,{med:'',q:'',lang:'',genre:'',author:'',series:'',fmt:'',rd:'',cmp:'',len:'',sort:'rel'});$('#q').value='';S.limit=48;render(true);return}
   if(el=t.closest('.op[data-med]')){S.med=el.dataset.med;S.limit=48;render(true);return}
   if(el=t.closest('.op[data-lang]')){S.lang=el.dataset.lang;S.limit=48;render(true);return}
   if(el=t.closest('.op[data-genre]')){S.genre=el.dataset.genre;S.limit=48;render(true);return}
