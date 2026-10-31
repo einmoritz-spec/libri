@@ -915,7 +915,7 @@ document.addEventListener('click',e=>{
   if(t.closest('#histbtn')){openHistory();return}
   if(el=t.closest('[data-repdf]')){showDone(HIST[+el.dataset.repdf],false);return}
   if(el=t.closest('[data-reorder]')){HIST[+el.dataset.reorder].keys.forEach(k=>{if(ent(k))cart.add(k)});saveCart();closeAll(1);refreshCartUI();openCart();return}
-  if(el=t.closest('[data-zoom]')){const p=P[+el.dataset.zoom];if(p){$('#zc').innerHTML=cover(p);$('#zoom').hidden=false;hiRes(p)}return}
+  if(el=t.closest('[data-zoom]')){const p=P[+el.dataset.zoom];if(p){$('#zc').innerHTML=cover(p);$('#zoom').hidden=false}return}
   if(t.closest('[data-zclose]')||t.id==='zoom'||t.closest('#zc')){$('#zoom').hidden=true;return}
   if(el=t.closest('[data-tf]')){const k=el.dataset.tf,v=el.dataset.v;closeAll(1);$('#q').value='';go('shop',Object.assign({q:'',author:'',series:'',lang:'',genre:'',fmt:'',med:'',rd:'',cmp:'',len:'',sort:'rel'},{[k]:v}));window.scrollTo(0,0);return}
   if(el=t.closest('[data-go]')){closeAll(1);go(el.dataset.go,el.dataset.sort?{sort:el.dataset.sort}:(el.dataset.go==='start'?{q:''}:null));if(el.dataset.go==='start')$('#q').value='';return}
