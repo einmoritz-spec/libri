@@ -102,7 +102,7 @@ button{cursor:pointer}
 .lay{display:grid;grid-template-columns:1fr;gap:14px}
 @media (min-width:900px){.lay{grid-template-columns:210px 1fr;gap:26px}}
 .lay{margin-top:14px}
-.frow{display:flex;align-items:center;gap:0;margin-top:12px;flex-wrap:wrap}.frow .cnt{margin-left:auto;font-size:13px;color:var(--muted);padding-left:10px}.frow .nbtn{margin-left:6px}
+.frow{display:flex;align-items:center;gap:0;margin-top:12px;flex-wrap:wrap}.frow .cnt{margin-left:auto;font-size:11.5px;color:var(--muted);padding-left:6px;white-space:nowrap}.frow .nbtn{margin-left:5px}.frow .fbtn,.frow .nbtn{padding:7px 12px}.frow .rbtn{margin-left:5px}
 .nbtn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:600;margin-left:6px}
 .rbtn{display:inline-flex;align-items:center;justify-content:center;width:38px;height:36px;margin-left:6px;border:1.5px solid var(--line2);background:var(--surface);border-radius:999px;color:var(--muted)}.rbtn:active{background:var(--soft);color:var(--accent)}
 .nbtn[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent)}
@@ -611,6 +611,15 @@ const nrm=x=>(x||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').repla
 
 // Mögliche Cover-Quellen zu einer ISBN (mehrere, weil nicht jede Quelle jede ISBN kennt)
 function isbn10(i){if(!/^978\d{10}$/.test(i||''))return '';const d=i.slice(3,12).split('').map(Number);let s=0;d.forEach((x,k)=>s+=x*(10-k));const c=(11-s%11)%11;return i.slice(3,12)+(c===10?'X':c)}
+// Beim Antippen eines Covers: größere Version nachladen (nur wenn sie wirklich größer ist)
+function hiRes(p){const i=p.isbn;if(!i&&!(p.iu||[]).length)return;const t=isbn10(i);
+  const c=[];if(t)c.push('https://images-na.ssl-images-amazon.com/images/P/'+t+'.01.LZZZZZZZ.jpg');
+  if(i)c.push('https://covers.openlibrary.org/b/isbn/'+i+'-L.jpg?default=false','https://books.google.com/books/content?vid=ISBN'+i+'&printsec=frontcover&img=1&zoom=0');
+  c.push(...(p.iu||[]));
+  const cur=$('#zc img');const base=cur&&cur.complete?cur.naturalWidth:0;
+  (async()=>{for(const u of c){const im=await new Promise(r=>{const x=new Image();const to=setTimeout(()=>{x.src='';r(null)},8000);x.onload=()=>{clearTimeout(to);r(x)};x.onerror=()=>{clearTimeout(to);r(null)};x.src=u});
+    if(!im||im.naturalWidth<Math.max(250,base*1.2)||im.naturalHeight<im.naturalWidth*1.1)continue;
+    if($('#zoom').hidden)return;const el=$('#zc img');if(el)el.src=u;return}})()}
 function srcs(p){const out=[...(p.iu||[])];if(p.isbn){const i=p.isbn,t=isbn10(i);
   out.push('https://books.google.com/books/content?vid=ISBN'+i+'&printsec=frontcover&img=1&zoom=1','https://portal.dnb.de/opac/mvb/cover?isbn='+i,'https://covers.openlibrary.org/b/isbn/'+i+'-L.jpg');
   if(t)out.push('https://images-na.ssl-images-amazon.com/images/P/'+t+'.01.LZZZZZZZ.jpg')}return out}
@@ -755,11 +764,12 @@ function openProduct(id,keep){
    ${readBtns(p)}
    ${isSeries(p)?`<button class="lnk" data-series="${esc(p.g)}" data-lang="${p.l}">Zur ganzen Reihe →</button>`:''}
    ${mt?`<div class="pm">${esc(mt)}</div>`:''}
-   ${p.ds?`<p class="ds" id="ds">${esc(p.ds)}</p>${p.ds.length>230?'<button class="mre" data-more-ds="1">Mehr lesen</button>':''}`:''}
+   ${p.ds?`<p class="ds" id="ds">${esc(p.ds)}</p><button class="mre" data-more-ds="1" hidden>Mehr lesen</button>`:''}
    ${more.length?`<div class="more-h">Mehr aus „${esc(serName(p.g,p.l))}“</div><div class="rail">${more.slice(0,16).map(x=>card(x)).join('')}</div>`:''}
    ${sim.length?`<div class="more-h">Ähnliche Bücher</div><div class="rail">${sim.map(x=>card(x)).join('')}</div>`:''}`;
   if(!keep){$('#scrim').hidden=false;$('#scrim').classList.remove('out');document.body.style.overflow='hidden'}
   $('#modal').hidden=false;$('#modal').classList.remove('out');
+  {const d=$('#ds'),b=$('#mb .mre');if(d&&b)b.hidden=!(d.scrollHeight>d.clientHeight+2)}
 }
 
 // ---------- Bestell-PDF ----------
@@ -886,7 +896,7 @@ document.addEventListener('click',e=>{
   if(t.closest('#histbtn')){openHistory();return}
   if(el=t.closest('[data-repdf]')){showDone(HIST[+el.dataset.repdf],false);return}
   if(el=t.closest('[data-reorder]')){HIST[+el.dataset.reorder].keys.forEach(k=>{if(ent(k))cart.add(k)});saveCart();closeAll(1);refreshCartUI();openCart();return}
-  if(el=t.closest('[data-zoom]')){const p=P[+el.dataset.zoom];if(p){$('#zc').innerHTML=cover(p);$('#zoom').hidden=false}return}
+  if(el=t.closest('[data-zoom]')){const p=P[+el.dataset.zoom];if(p){$('#zc').innerHTML=cover(p);$('#zoom').hidden=false;hiRes(p)}return}
   if(t.closest('[data-zclose]')||t.id==='zoom'||t.closest('#zc')){$('#zoom').hidden=true;return}
   if(el=t.closest('[data-tf]')){const k=el.dataset.tf,v=el.dataset.v;closeAll(1);$('#q').value='';go('shop',Object.assign({q:'',author:'',series:'',lang:'',genre:'',fmt:'',med:'',rd:'',cmp:'',len:'',sort:'rel'},{[k]:v}));window.scrollTo(0,0);return}
   if(el=t.closest('[data-go]')){closeAll(1);go(el.dataset.go,el.dataset.sort?{sort:el.dataset.sort}:(el.dataset.go==='start'?{q:''}:null));if(el.dataset.go==='start')$('#q').value='';return}
@@ -922,7 +932,7 @@ $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();co
 $('#q').addEventListener('focus',e=>{if(e.target.value.trim().length>=2)sgShow(e.target.value)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){sgHide();if(!$('#zoom').hidden)$('#zoom').hidden=true;else{BK=null;closeAll()}}});
 
-$('#foot').textContent=`${P.length} Titel · ${P.filter(p=>p.eb).length} eBooks · ${P.filter(p=>p.pb).length} gedruckte Bücher · Stand ${BUILT}`;
+$('#foot').innerHTML=`${P.length} Titel · ${P.filter(p=>p.eb).length} eBooks · ${P.filter(p=>p.pb).length} gedruckte Bücher<br>Stand ${BUILT}`;
 render();if(RESTORE_Y)window.scrollTo(0,RESTORE_Y);
 /* Eingebettet in Libri: ergänzte Angaben (ISBN, Cover, Text …) kommen von dort. */
 window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='libri-shop-meta'||!Array.isArray(d.items))return;
