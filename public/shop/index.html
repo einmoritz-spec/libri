@@ -632,10 +632,10 @@ function swapCover(p,url){p.img=url;document.querySelectorAll('.cv[data-pi="'+p.
 async function upRun(){if(upBusy)return;upBusy=true;
   while(upQ.length){const p=upQ.shift();const k=p.k2;
     if(typeof UPC[k]==='string'){swapCover(p,UPC[k]);continue}
-    let got='';for(const u of srcs(p)){if(await loadImg(u)){got=u;break}}
+    let got='';for(const u of srcs(p)){if(await loadImg(u,p.nw?90:200)){got=u;break}}
     if(got){UPC[k]=got;upSave();swapCover(p,got)}else{UPC[k]=Date.now();upSave()}}
   upBusy=false}
-function upWant(p){if(!p||!p.nw||p._up)return;const v=UPC[p.k2];if(typeof v==='number'&&Date.now()-v<6*3600e3)return;p._up=1;upQ.push(p);upRun()}
+function upWant(p){if(!p||!(p.nw||p.isbn)||p._up)return;const v=UPC[p.k2];if(typeof v==='number'&&Date.now()-v<6*3600e3)return;p._up=1;upQ.push(p);upRun()}
 const covQ=[],covSeen=new Set();let covBusy=false;
 function covSet(p,url){const im=new Image();
   im.onload=()=>{if(im.naturalWidth<40){p.img='';CC[p.k2]=0;ccSave();return}p.img=url;
