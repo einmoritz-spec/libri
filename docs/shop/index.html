@@ -663,10 +663,29 @@ async function covRun(){if(covBusy)return;covBusy=true;
     if(u){CC[p.k2]=u;covSet(p,u)}else CC[p.k2]=0
     ccSave();await new Promise(r=>setTimeout(r,350))}
   covBusy=false}
+// ISBN fehlt: im Hintergrund über Google Books suchen, merken und fürs Cover nutzen
+const IBC=(()=>{try{return JSON.parse(localStorage.getItem('isbnc')||'{}')}catch(e){return {}}})();
+const ibSave=()=>{try{localStorage.setItem('isbnc',JSON.stringify(IBC))}catch(e){}};
+const ibQ=[];let ibBusy=false;
+function isbnWant(p){if(!p||p.isbn||p._ib)return;const v=IBC[p.k2];if(typeof v==='string'&&v){p.isbn=v;upWant(p);return}
+  if(typeof v==='number'&&Date.now()-v<24*3600e3)return;p._ib=1;ibQ.push(p);ibRun()}
+async function ibRun(){if(ibBusy)return;ibBusy=true;
+  while(ibQ.length){const p=ibQ.shift();const tt=nrm(p.t),aa=nrm(p.a).split(' ').pop();
+    const q=encodeURIComponent(`intitle:${p.t.replace(/[:"]/g,' ')}${p.a?' inauthor:'+p.a.split(/[&,]/)[0].trim():''}`);
+    const d=await jget(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=10${p.l==='de'?'&langRestrict=de':p.l==='en'?'&langRestrict=en':''}&fields=items(volumeInfo(title,authors,industryIdentifiers))`);
+    if(d===null){ibQ.length=0;break}
+    let got='';
+    for(const it of d.items||[]){const v=it.volumeInfo||{};const vt=nrm(v.title),va=nrm((v.authors||[]).join(' '));
+      if(!((vt.includes(tt)||tt.includes(vt))&&(!aa||va.includes(aa))))continue;
+      const id=(v.industryIdentifiers||[]).find(x=>x.type==='ISBN_13'&&/^97[89]\d{10}$/.test(x.identifier));
+      if(id){got=id.identifier;break}}
+    if(got){IBC[p.k2]=got;p.isbn=got;p._up=0;upWant(p)}else IBC[p.k2]=Date.now();
+    ibSave();await new Promise(r=>setTimeout(r,400))}
+  ibBusy=false}
 let covIO=null;
 function covWatch(){if(location.protocol==='blob:'||!('IntersectionObserver' in window))return;
   if(!covIO)covIO=new IntersectionObserver(es=>{es.forEach(e=>{if(!e.isIntersecting)return;covIO.unobserve(e.target);
-    const p=P[+e.target.dataset.pi];upWant(p);if(!p||p.img||(CC[p.k2]===0&&!p.iu)||(p.c&&!p.iu)||covSeen.has(p._i))return;covSeen.add(p._i);covQ.push(p);covRun()})},{rootMargin:'300px'});
+    const p=P[+e.target.dataset.pi];upWant(p);isbnWant(p);if(!p||p.img||(CC[p.k2]===0&&!p.iu)||(p.c&&!p.iu)||covSeen.has(p._i))return;covSeen.add(p._i);covQ.push(p);covRun()})},{rootMargin:'300px'});
   document.querySelectorAll('.cv[data-pi]').forEach(el=>covIO.observe(el))}
 function go(v,o){S.view=v;if(o)Object.assign(S,o);S.limit=48;render()}
 
@@ -932,7 +951,7 @@ $('#q').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();co
 $('#q').addEventListener('focus',e=>{if(e.target.value.trim().length>=2)sgShow(e.target.value)});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){sgHide();if(!$('#zoom').hidden)$('#zoom').hidden=true;else{BK=null;closeAll()}}});
 
-$('#foot').innerHTML=`${P.length} Titel · ${P.filter(p=>p.eb).length} eBooks · ${P.filter(p=>p.pb).length} gedruckte Bücher<br>Stand ${BUILT}`;
+P.forEach(p=>{if(!p.isbn&&typeof IBC[p.k2]==='string')p.isbn=IBC[p.k2]});$('#foot').innerHTML=`${P.length} Titel · ${P.filter(p=>p.eb).length} eBooks · ${P.filter(p=>p.pb).length} gedruckte Bücher<br>Stand ${BUILT}`;
 render();if(RESTORE_Y)window.scrollTo(0,RESTORE_Y);
 /* Eingebettet in Libri: ergänzte Angaben (ISBN, Cover, Text …) kommen von dort. */
 window.addEventListener('message',e=>{const d=e.data;if(!d||d.type!=='libri-shop-meta'||!Array.isArray(d.items))return;
