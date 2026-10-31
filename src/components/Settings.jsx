@@ -216,8 +216,8 @@ export default function Settings({ notify, onOpenShop }) {
         return
       }
       if (payload?.format === 'libri-links') {
-        const { linked, missing, shopLinked } = await importLinks(payload)
-        notify(`${shopLinked} Shop-Verknüpfungen, ${linked} Bücher verknüpft${missing ? `, ${missing} nicht in deiner Bibliothek` : ''}${saved ? ' · vorher gesichert' : ''}`)
+        const { linked, missing, shopLinked, covers } = await importLinks(payload)
+        notify(`${shopLinked} Shop-Verknüpfungen, ${linked} Bücher verknüpft${covers ? `, ${covers} Cover ersetzt` : ''}${missing ? `, ${missing} nicht in deiner Bibliothek` : ''}${saved ? ' · vorher gesichert' : ''}`)
         return
       }
       const { added, updated, skipped } = await importLibrary(payload, { replace })

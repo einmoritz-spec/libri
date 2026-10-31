@@ -611,18 +611,22 @@ async function diffForImport(existing, incoming, coverData) {
     und bringt keine Warenkorb-/Bestellangaben mit. Bücher werden nur ergänzt, wenn es sie schon gibt. */
 export async function importLinks(payload) {
   let linked = 0
+  let covers = 0
   let missing = 0
   for (const raw of payload.books || []) {
     const hasFiles = Array.isArray(raw.files) && raw.files.length
-    if (!hasFiles && !(raw.audioMinutes > 0)) continue
-    const existing = raw.isbn13
-      ? await findByIsbn(raw.isbn13)
-      : await findByTitleAuthor(raw.title, raw.authors?.[0])
+    if (!hasFiles && !(raw.audioMinutes > 0) && !raw.coverData) continue
+    const existing = (raw.isbn13 ? await findByIsbn(raw.isbn13) : undefined) ||
+      (raw.title ? await findByTitleAuthor(raw.title, raw.authors?.[0]) : undefined)
     if (!existing) { missing++; continue }
+    // Ein mitgeliefertes Cover ersetzt das vorhandene, unbeschnitten (dunkle Cover haben keine schwarzen Ränder).
+    const coverBlob = raw.coverData ? await dataUrlToBlob(raw.coverData) : null
     await updateBook(existing.id, {
       ...(hasFiles ? { files: raw.files } : {}),
-      ...(raw.audioMinutes > 0 && !(existing.audioMinutes > 0) ? { audioMinutes: raw.audioMinutes } : {})
+      ...(raw.audioMinutes > 0 && !(existing.audioMinutes > 0) ? { audioMinutes: raw.audioMinutes } : {}),
+      ...(coverBlob ? { coverBlob } : {})
     })
+    if (coverBlob) covers++
     linked++
   }
   let shopLinked = 0
@@ -632,7 +636,7 @@ export async function importLinks(payload) {
     await db.shopMeta.put({ ...(have || {}), key: r.key, files: r.files })
     shopLinked++
   }
-  return { linked, missing, shopLinked }
+  return { linked, missing, shopLinked, covers }
 }
 
 /** Sicherung der aktuellen Bibliothek als Datei, bevor etwas eingelesen wird. Leere Bibliothek: nichts zu sichern. */
