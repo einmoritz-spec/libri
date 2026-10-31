@@ -695,7 +695,9 @@ function hiRes(p){const i=p.isbn;if(!i&&!(p.iu||[]).length)return;const t=isbn10
     if($('#zoom').hidden)return;const el=$('#zc img');if(el)el.src=u;return}})()}
 function srcs(p){const out=[...(p.iu||[])];if(p.isbn){const i=p.isbn,t=isbn10(i);
   out.push('https://books.google.com/books/content?vid=ISBN'+i+'&printsec=frontcover&img=1&zoom=1','https://portal.dnb.de/opac/mvb/cover?isbn='+i,'https://covers.openlibrary.org/b/isbn/'+i+'-L.jpg');
-  if(t)out.push('https://images-na.ssl-images-amazon.com/images/P/'+t+'.01.LZZZZZZZ.jpg')}return out}
+  if(t)out.push('https://images-na.ssl-images-amazon.com/images/P/'+t+'.01.LZZZZZZZ.jpg');
+  const e=ALTI[i];if(e)out.push('https://books.google.com/books/content?vid=ISBN'+e+'&printsec=frontcover&img=1&zoom=1','https://portal.dnb.de/opac/mvb/cover?isbn='+e,'https://covers.openlibrary.org/b/isbn/'+e+'-L.jpg')}return out}
+const ALTI={"9783764532574": "9783641270926", "9783764532581": "9783641270933", "9783764532598": "9783641270940", "9783764532567": "9783641270919", "9783764532291": "9783641177669", "9783764532307": "9783641177638", "9783764532314": "9783641182991", "9783764532031": "9783641183677", "9783764532048": "9783641183691", "9783764532055": "9783641183684"};
 const UPC=(()=>{try{return JSON.parse(localStorage.getItem('covu2')||'{}')}catch(e){return {}}})();
 const upSave=()=>{try{localStorage.setItem('covu2',JSON.stringify(UPC))}catch(e){}};
 function loadImg(u,min){return new Promise(r=>{const i=new Image();const t=setTimeout(()=>{i.src='';r(0)},8000);i.onload=()=>{clearTimeout(t);r(i.naturalWidth>(min||90)&&i.naturalHeight>130)};i.onerror=()=>{clearTimeout(t);r(0)};i.src=u})}
