@@ -567,6 +567,9 @@ function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[
 function ordSer(a){const so=new Map();const SR=['City Watch','Death','Rincewind','Industrial Revolution','Ancient Civilizations','Witches','Tiffany Aching'];SR.forEach(x=>{if(a.some(p=>p.s===x))so.set(x,so.size)});a.forEach(p=>{if(!so.has(p.s))so.set(p.s,so.size)});const nv=p=>{const v=parseFloat(String(p.n).replace('–','-'));return isNaN(v)?1e9:v};return a.map((p,i)=>[p,i]).sort((x,y)=>so.get(x[0].s)-so.get(y[0].s)||(x[0].c?1:0)-(y[0].c?1:0)||nv(x[0])-nv(y[0])||x[1]-y[1]).map(v=>v[0])}
 // Fehlende Bände einer Reihe als ausgegraute Platzhalter (Cover/Titel nach Möglichkeit aus der anderen Sprache)
 const MISS=[
+ {g:'Realm of the Elderlings',l:'de',s:'The Tawny Man',n:1,t:'Diener der alten Macht',a:'Robin Hobb',isbn:'9783764532031'},
+ {g:'Realm of the Elderlings',l:'de',s:'The Tawny Man',n:2,t:'Prophet der sechs Provinzen',a:'Robin Hobb',isbn:'9783764532048'},
+ {g:'Realm of the Elderlings',l:'de',s:'The Tawny Man',n:3,t:'Beschützer der Drachen',a:'Robin Hobb',isbn:'9783764532055'},
  {g:'Realm of the Elderlings',l:'de',s:'The Rain Wild Chronicles',n:1,t:'Wächter der Drachen',a:'Robin Hobb',isbn:'9783764532567'},
  {g:'Cosmere',l:'en',s:'Die Nebelgeborenen / Mistborn',n:7,t:'The Lost Metal',a:'Brandon Sanderson',mb:1},
  {g:'The Witcher',l:'de',n:6,t:'Etwas endet, etwas beginnt',a:'Andrzej Sapkowski',isbn:'9783423262743'},
@@ -640,12 +643,16 @@ function seriesView(){
   const nvv=p=>/^\d+(\.\d+)?$/.test(String(p.n))?parseFloat(p.n):null;
   const gv=g=>gaps[g].m&&gaps[g].m.s?gaps[g].m.n:g;
   const flushSub=sub=>{Object.keys(gaps).map(Number).filter(g=>!gaps[g].done&&gaps[g].m&&gaps[g].m.s===sub).sort((x,y)=>gv(x)-gv(y)).forEach(g=>{gaps[g].done=1;body+=gapHtml(g)})};
-  items.forEach(p=>{if(subs.size>1&&p.s!==cur){if(cur!==null)flushSub(cur);cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}
+  const REO=['The Farseer Trilogy','The Liveship Traders','The Tawny Man','The Rain Wild Chronicles','The Fitz and the Fool','Soldier Son'];
+  const emptySubs=[...new Set(Object.values(gaps).map(g=>g.m&&g.m.s).filter(x=>x&&!subs.has(x)))].sort((a,b)=>REO.indexOf(a)-REO.indexOf(b));
+  const doneE=new Set();
+  const emitEmpty=lim=>emptySubs.forEach(x=>{if(doneE.has(x)||(lim!==undefined&&!(REO.indexOf(x)>=0&&REO.indexOf(x)<lim)))return;doneE.add(x);body+=`<h3 class="sub-h">${esc(shortSer({s:x,g:S.ser,l:lang}))}</h3>`;flushSub(x)});
+  items.forEach(p=>{if(subs.size>1&&p.s!==cur){if(cur!==null)flushSub(cur);emitEmpty(REO.indexOf(p.s)>=0?REO.indexOf(p.s):undefined);cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}
     const v=nvv(p);
     if(v!==null)for(const g of Object.keys(gaps).map(Number).filter(g=>gv(g)<v&&!gaps[g].done&&(!gaps[g].m||!gaps[g].m.s||gaps[g].m.s===p.s)).sort((x,y)=>gv(x)-gv(y))){gaps[g].done=1;body+=gapHtml(g)}
     if(p.c)flushSub(p.s);
     body+=card(p)});
-  flushSub(cur);
+  flushSub(cur);emitEmpty();
   Object.keys(gaps).map(Number).filter(g=>!gaps[g].done).sort((x,y)=>x-y).forEach(g=>{body+=gapHtml(g)});
   const au=[...new Set(all.map(p=>p.p))].slice(0,3).join(', ');
   const tog=langs.length>1?`<div class="lt" role="group" aria-label="Sprache">${langs.map(l=>`<button data-sl="${l}" aria-pressed="${l===lang}">${l.toUpperCase()}</button>`).join('')}</div>`:'';
