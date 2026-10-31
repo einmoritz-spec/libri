@@ -547,6 +547,9 @@ function serName(g,l){const a=g.split(' / ');return a.length>1?(l==='de'?a[0]:a[
 function ordSer(a){const so=new Map();const SR=['City Watch','Death','Rincewind','Industrial Revolution','Ancient Civilizations','Witches','Tiffany Aching'];SR.forEach(x=>{if(a.some(p=>p.s===x))so.set(x,so.size)});a.forEach(p=>{if(!so.has(p.s))so.set(p.s,so.size)});const nv=p=>{const v=parseFloat(String(p.n).replace('–','-'));return isNaN(v)?1e9:v};return a.map((p,i)=>[p,i]).sort((x,y)=>so.get(x[0].s)-so.get(y[0].s)||(x[0].c?1:0)-(y[0].c?1:0)||nv(x[0])-nv(y[0])||x[1]-y[1]).map(v=>v[0])}
 // Fehlende Bände einer Reihe als ausgegraute Platzhalter (Cover/Titel nach Möglichkeit aus der anderen Sprache)
 const MISS=[
+ {g:'Realm of the Elderlings',l:'en',s:'The Rain Wild Chronicles',n:3,t:'City of Dragons',a:'Robin Hobb',isbn:'9780008154417'},
+ {g:'Realm of the Elderlings',l:'en',s:'The Rain Wild Chronicles',n:4,t:'Blood of Dragons',a:'Robin Hobb',isbn:'9780008154462'},
+ {g:'Realm of the Elderlings',l:'en',s:'The Fitz and the Fool',n:0.5,t:'The Wilful Princess and the Piebald Prince',a:'Robin Hobb',isbn:'9780008245009'},
  {g:'Das Reich der sieben Höfe',l:'de',n:6,t:'A Court of Splintered Harmony',a:'Sarah J. Maas',isbn:'9781639739134'},
  {g:'Das Reich der sieben Höfe',l:'de',n:7,t:'A Court of Forgotten Melody',a:'Sarah J. Maas',isbn:'9798260200568'},
  {g:'Dämonenzyklus',l:'de',n:9,t:'Der König der Dämonen',a:'Peter V. Brett'},
@@ -584,14 +587,16 @@ function gapMap(items,all,sub){
   const nv=p=>/^\d+(\.\d+)?$/.test(String(p.n))?parseFloat(p.n):null;
   const ns=items.filter(p=>!p.c).map(nv).filter(v=>v!==null);
   const have=new Set(ns),out={};
-  MISS.filter(x=>x.g===g0&&x.l===l0&&!have.has(x.n)).forEach(m=>{
+  MISS.forEach((m,mi)=>{if(m.g!==g0||m.l!==l0)return;
+    if(m.s){if(items.some(p=>!p.c&&p.s===m.s&&nv(p)===m.n))return;out[100000+mi]={m,o:null};return}
+    if(have.has(m.n))return;
     const o=all.find(p=>p.l!==l0&&nv(p)===m.n&&!p.c);out[m.n]={m,o}});
   if(!sub&&ns.length>=2){const mx=Math.max(...ns.filter(v=>v<1e3));
     if(mx<=60)for(let n=1;n<mx;n++)if(!have.has(n)&&!out[n]){
       const o=all.find(p=>p.l!==l0&&nv(p)===n&&!p.c);out[n]={m:null,o}}}
   return out}
 function gapCard(n,g){
-  const o=g.o,m=g.m;
+  const o=g.o,m=g.m;if(m&&m.s)n=m.n;
   const t=m?m.t:o?title(o):'Band '+n,a=m?m.a:o?o.a:'';
   let img='';
   if(m&&m.img)img=`<img class="gapimg" src="${m.img}" alt="">`;
@@ -610,10 +615,14 @@ function seriesView(){
   const gaps=gapMap(items,all,subs.size>1);
   const gapHtml=n=>gapCard(n,gaps[n]);
   const nvv=p=>/^\d+(\.\d+)?$/.test(String(p.n))?parseFloat(p.n):null;
-  items.forEach(p=>{if(subs.size>1&&p.s!==cur){cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}
+  const gv=g=>gaps[g].m&&gaps[g].m.s?gaps[g].m.n:g;
+  const flushSub=sub=>{Object.keys(gaps).map(Number).filter(g=>!gaps[g].done&&gaps[g].m&&gaps[g].m.s===sub).sort((x,y)=>gv(x)-gv(y)).forEach(g=>{gaps[g].done=1;body+=gapHtml(g)})};
+  items.forEach(p=>{if(subs.size>1&&p.s!==cur){if(cur!==null)flushSub(cur);cur=p.s;body+=`<h3 class="sub-h">${esc(shortSer(p))}</h3>`}
     const v=nvv(p);
-    if(v!==null)for(const g of Object.keys(gaps).map(Number).filter(g=>g<v&&!gaps[g].done&&(!gaps[g].m||!gaps[g].m.s||gaps[g].m.s===p.s)).sort((x,y)=>x-y)){gaps[g].done=1;body+=gapHtml(g)}
+    if(v!==null)for(const g of Object.keys(gaps).map(Number).filter(g=>gv(g)<v&&!gaps[g].done&&(!gaps[g].m||!gaps[g].m.s||gaps[g].m.s===p.s)).sort((x,y)=>gv(x)-gv(y))){gaps[g].done=1;body+=gapHtml(g)}
+    if(p.c)flushSub(p.s);
     body+=card(p)});
+  flushSub(cur);
   Object.keys(gaps).map(Number).filter(g=>!gaps[g].done).sort((x,y)=>x-y).forEach(g=>{body+=gapHtml(g)});
   const au=[...new Set(all.map(p=>p.p))].slice(0,3).join(', ');
   const tog=langs.length>1?`<div class="lt" role="group" aria-label="Sprache">${langs.map(l=>`<button data-sl="${l}" aria-pressed="${l===lang}">${l.toUpperCase()}</button>`).join('')}</div>`:'';
