@@ -40,11 +40,11 @@ export default defineConfig({
       // nur unbenutzt im Hintergrund zu warten.
       includeAssets: ['favicon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable.png'],
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        globPatterns: ['**/*.{js,css,html,svg,png,jpg,woff2}'],
         // Der ZXing-Fallback wiegt gut 400 KB und wird nur auf Geräten ohne
         // native Barcode-Erkennung gebraucht — also nicht auf Android. Deshalb
         // nicht vorab mitladen, sondern erst bei Bedarf holen und dann behalten.
-        globIgnores: ['**/zxing*.js'],
+        globIgnores: ['**/zxing*.js', 'guides/**'],
         maximumFileSizeToCacheInBytes: 16 * 1024 * 1024,
         // API-Antworten und Cover offline vorhalten
         runtimeCaching: [

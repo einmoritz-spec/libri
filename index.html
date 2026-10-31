@@ -31,6 +31,13 @@
         document.querySelector('meta[name="theme-color"]')
           .setAttribute('content', t === 'light' ? '#faf3e7' : '#171b21')
         if (t === 'light') document.documentElement.style.background = '#faf3e7'
+        var sk = localStorage.getItem('libri:skin')
+        var skc = { mahagoni: '#150e09', oxford: '#0d1712', pergament: '#e3d2ad' }[sk]
+        if (skc) {
+          document.documentElement.setAttribute('data-skin', sk)
+          document.documentElement.style.background = skc
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', skc)
+        }
       } catch (e) {}
     </script>
     <style>

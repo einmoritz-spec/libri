@@ -47,6 +47,9 @@ export default function Settings({ notify, onOpenShop }) {
   const [theme, setThemeState] = useState(
     () => localStorage.getItem('libri:theme') || 'light'
   )
+  const [skin, setSkinState] = useState(() => {
+    try { return localStorage.getItem('libri:skin') || '' } catch { return '' }
+  })
   const [celebrate, setCelebrateState] = useState(
     () => localStorage.getItem('libri:celebrate') !== '0'
   )
@@ -156,7 +159,20 @@ export default function Settings({ notify, onOpenShop }) {
     setThemeState(next)
     localStorage.setItem('libri:theme', next)
     document.documentElement.setAttribute('data-theme', next)
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'light' ? '#faf3e7' : '#171b21')
+    if (!skin) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'light' ? '#faf3e7' : '#171b21')
+  }
+
+  // Ein Design (Mahagoni / Oxford / Pergament) überschreibt Hell/Dunkel.
+  // Nochmal antippen schaltet es wieder aus.
+  function setSkin(next) {
+    const v = skin === next ? '' : next
+    setSkinState(v)
+    try { v ? localStorage.setItem('libri:skin', v) : localStorage.removeItem('libri:skin') } catch {}
+    if (v) document.documentElement.setAttribute('data-skin', v)
+    else document.documentElement.removeAttribute('data-skin')
+    const meta = { mahagoni: '#150e09', oxford: '#0d1712', pergament: '#e3d2ad' }[v]
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', meta || (theme === 'light' ? '#faf3e7' : '#171b21'))
+    document.documentElement.style.background = ''
   }
 
   async function doExport() {
@@ -248,6 +264,15 @@ export default function Settings({ notify, onOpenShop }) {
             <button aria-pressed={theme === 'dark'} onClick={() => setTheme('dark')}>Dunkel</button>
           </div>
         </Row>
+        <div className="setting-row skin-row">
+          <span>Thema</span>
+          <div className="skin-switch" role="group" aria-label="Thema">
+            <button data-k="mahagoni" aria-pressed={skin === 'mahagoni'} onClick={() => setSkin('mahagoni')}>Mahagoni</button>
+            <button data-k="oxford" aria-pressed={skin === 'oxford'} onClick={() => setSkin('oxford')}>Oxford</button>
+            <button data-k="pergament" aria-pressed={skin === 'pergament'} onClick={() => setSkin('pergament')}>Pergament</button>
+          </div>
+          <small className="skin-hint">{skin ? 'Das Thema überschreibt Hell/Dunkel. Nochmal antippen schaltet es aus.' : 'Optional – überschreibt dann Hell/Dunkel.'}</small>
+        </div>
         <Row label="Abschluss-Moment">
           <OnOff on={celebrate} set={setCelebrate} />
         </Row>

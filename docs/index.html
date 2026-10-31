@@ -31,6 +31,13 @@
         document.querySelector('meta[name="theme-color"]')
           .setAttribute('content', t === 'light' ? '#faf3e7' : '#171b21')
         if (t === 'light') document.documentElement.style.background = '#faf3e7'
+        var sk = localStorage.getItem('libri:skin')
+        var skc = { mahagoni: '#150e09', oxford: '#0d1712', pergament: '#e3d2ad' }[sk]
+        if (skc) {
+          document.documentElement.setAttribute('data-skin', sk)
+          document.documentElement.style.background = skc
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', skc)
+        }
       } catch (e) {}
     </script>
     <style>
@@ -41,8 +48,8 @@
       #boot p { color: #8d97a5; margin: 0 0 8px; font-size: 15px; }
       #boot code { color: #e0a93b; font-size: 13px; word-break: break-all; }
     </style>
-    <script type="module" crossorigin src="./assets/index-C4E5g5Gs.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CL-lphDv.css">
+    <script type="module" crossorigin src="./assets/index-QWXBPIXk.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-9muScxAI.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body>
     <!-- Dieser Platzhalter wird von React sofort überschrieben. Bleibt er stehen,

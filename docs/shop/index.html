@@ -4,6 +4,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>try{var k=localStorage.getItem('libri:skin');if(k)document.documentElement.setAttribute('data-skin',k)}catch(e){}</script>
 <style>
 /* Mini-Shop im Stil der Lese-App: Creme, Bernstein, Serifen-Titel. Header sticky, Warenkorb als Drawer. */
 :root{
@@ -255,6 +256,39 @@ button.auL{background:none;border:0;padding:0;margin:0;font:inherit;color:var(--
 .drawer.out{animation:fadeo .15s ease forwards}
 .cv img,.pc-img img,.gapimg{animation:fadei .25s ease both}
 @media (prefers-reduced-motion:reduce){#main.vin,.scrim,.mb,.drawer,.cv img,.pc-img img,.gapimg{animation:none!important}}
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/cormorant-garamond-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/cormorant-garamond-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:700;font-display:swap;src:url('fonts/cormorant-garamond-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:500;font-display:swap;src:url('fonts/cormorant-garamond-latin-500-italic.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/eb-garamond-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/eb-garamond-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/eb-garamond-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Cinzel';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/cinzel-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Cinzel';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/cinzel-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/crimson-pro-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:500;font-display:swap;src:url('fonts/crimson-pro-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:600;font-display:swap;src:url('fonts/crimson-pro-latin-600-normal.woff2') format('woff2')}
+
+html[data-skin='mahagoni']:root{--bg:#150e09;--surface:#22160e;--ink:#f0e4c8;--muted:#b79f7c;--line:#3d2a1a;--line2:#5a4126;--accent:#cfa64b;--accent-ink:#1a1008;--soft:#3a2819;--dark:#0e0805;--dark-ink:#e9d9b4;--pill:rgba(14,8,5,.88);--cover-ink:#f0e4c8;--gold:#d9b25a;--shadow:0 12px 20px -10px rgba(0,0,0,.8);color-scheme:dark;--serif:'Cormorant Garamond',Georgia,serif;--sans:'EB Garamond',Georgia,serif;}
+html[data-skin='mahagoni'] body{background-image:radial-gradient(130% 70% at 50% 0%,#2a1b11,#190f09 60%,#120a06);background-color:var(--bg);background-attachment:fixed;background-size:100% 100%;font-size:16.5px}
+html[data-skin='mahagoni'] .logo{font-family:'Cinzel',serif;letter-spacing:.2em;text-transform:uppercase;font-size:17px;color:var(--accent);font-weight:600}
+html[data-skin='mahagoni'] .hd{background:var(--bg);border-bottom:2px solid #d6b25a}
+html[data-skin='mahagoni'] .ann{font-family:var(--serif);font-style:italic;font-size:14px;letter-spacing:.03em}
+html[data-skin='mahagoni'] h2,html[data-skin='mahagoni'] .sh h2{font-family:'Cinzel',serif;font-weight:500;letter-spacing:.12em;text-transform:uppercase;font-size:15px}
+
+html[data-skin='oxford']:root{--bg:#0d1712;--surface:#162419;--ink:#ece3c9;--muted:#a2b09c;--line:#27392e;--line2:#3b5242;--accent:#d9b862;--accent-ink:#10170f;--soft:#1f3326;--dark:#08100b;--dark-ink:#e6dcc0;--pill:rgba(8,16,11,.88);--cover-ink:#ece3c9;--gold:#e0c36d;--shadow:0 12px 20px -10px rgba(0,0,0,.8);color-scheme:dark;--serif:'Crimson Pro',Georgia,serif;--sans:'Crimson Pro',Georgia,serif;}
+html[data-skin='oxford'] body{background-image:radial-gradient(130% 70% at 50% 0%,#17291f,#0f1b15 60%,#0a130e);background-color:var(--bg);background-attachment:fixed;background-size:100% 100%;font-size:16.5px}
+html[data-skin='oxford'] .logo{font-family:'Cinzel',serif;letter-spacing:.2em;text-transform:uppercase;font-size:17px;color:var(--accent);font-weight:600}
+html[data-skin='oxford'] .hd{background:var(--bg);border-bottom:2px solid #e0c36d}
+html[data-skin='oxford'] .ann{font-family:var(--serif);font-style:italic;font-size:14px;letter-spacing:.03em}
+html[data-skin='oxford'] h2,html[data-skin='oxford'] .sh h2{font-family:'Cinzel',serif;font-weight:500;letter-spacing:.12em;text-transform:uppercase;font-size:15px}
+
+html[data-skin='pergament']:root{--bg:#e3d2ad;--surface:#eddcb8;--ink:#2a190e;--muted:#6a5133;--line:#c9b080;--line2:#b09560;--accent:#7b1f2b;--accent-ink:#f3e7c9;--soft:#d3be92;--dark:#2a1a10;--dark-ink:#ecd9b0;--pill:rgba(42,26,16,.88);--cover-ink:#f0e4c8;--gold:#b8923f;--shadow:0 10px 18px -10px rgba(60,38,12,.6);color-scheme:light;--serif:'Cormorant Garamond',Georgia,serif;--sans:'EB Garamond',Georgia,serif;}
+html[data-skin='pergament'] body{background-image:radial-gradient(130% 70% at 50% 0%,#ecdcb9,#e3d2ad 55%,#d9c699);background-color:var(--bg);background-attachment:fixed;background-size:100% 100%;font-size:16.5px}
+html[data-skin='pergament'] .logo{font-family:'Cinzel',serif;letter-spacing:.2em;text-transform:uppercase;font-size:17px;color:var(--accent);font-weight:600}
+html[data-skin='pergament'] .hd{background:var(--bg);border-bottom:2px solid #b8923f}
+html[data-skin='pergament'] .ann{font-family:var(--serif);font-style:italic;font-size:14px;letter-spacing:.03em}
+html[data-skin='pergament'] h2,html[data-skin='pergament'] .sh h2{font-family:'Cinzel',serif;font-weight:500;letter-spacing:.12em;text-transform:uppercase;font-size:15px}
 </style>
 
 </head><body><header class="hd full"><div class="hd-in">

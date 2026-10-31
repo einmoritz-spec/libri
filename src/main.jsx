@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import ErrorBoundary from './components/ErrorBoundary'
 import './styles.css'
+import './skins.css'
 
 // Die Update-Übernahme selbst (skipWaiting/clientsClaim + Reload) läuft über
 // die automatisch eingebundene Registrierung — die einzige Variante, bei der

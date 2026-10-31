@@ -1,0 +1,106 @@
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:500;font-display:swap;src:url('./fonts/cormorant-garamond-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:600;font-display:swap;src:url('./fonts/cormorant-garamond-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:normal;font-weight:700;font-display:swap;src:url('./fonts/cormorant-garamond-latin-700-normal.woff2') format('woff2')}
+@font-face{font-family:'Cormorant Garamond';font-style:italic;font-weight:500;font-display:swap;src:url('./fonts/cormorant-garamond-latin-500-italic.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:400;font-display:swap;src:url('./fonts/eb-garamond-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:500;font-display:swap;src:url('./fonts/eb-garamond-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'EB Garamond';font-style:normal;font-weight:600;font-display:swap;src:url('./fonts/eb-garamond-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Cinzel';font-style:normal;font-weight:500;font-display:swap;src:url('./fonts/cinzel-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Cinzel';font-style:normal;font-weight:600;font-display:swap;src:url('./fonts/cinzel-latin-600-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:400;font-display:swap;src:url('./fonts/crimson-pro-latin-400-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:500;font-display:swap;src:url('./fonts/crimson-pro-latin-500-normal.woff2') format('woff2')}
+@font-face{font-family:'Crimson Pro';font-style:normal;font-weight:600;font-display:swap;src:url('./fonts/crimson-pro-latin-600-normal.woff2') format('woff2')}
+
+:root[data-skin='mahagoni'][data-theme]{--night:#150e09;--slate:#1d140d;--raised:#2a1c12;--raised-2:#35241761;--board:#5b3a1f;--line:#3d2a1a;--paper:#f0e4c8;--dim:#b79f7c;--lamp:#cfa64b;--lamp-wash:rgba(207,166,75,.18);--leaf:#86a273;--leaf-wash:rgba(134,162,115,.16);--alarm:#c9583f;--shadow-color:8,4,1;--nav-bg:#1b110a;--r:7px;--serif:'Cormorant Garamond',Georgia,serif;--sans:'EB Garamond',Georgia,serif;}
+:root[data-skin='mahagoni']{background:#150e09}
+:root[data-skin='mahagoni'] body{background-image:radial-gradient(130% 70% at 50% 0%,#2a1b11,#190f09 60%,#120a06);background-color:#150e09;background-attachment:fixed;background-size:100% 100%;font-size:17px;line-height:1.4}
+:root[data-skin='mahagoni'] body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.38) 100%)}
+:root[data-skin='mahagoni'] .wordmark{font-family:'Cinzel',serif;font-variation-settings:normal;font-weight:600;font-size:25px;letter-spacing:.2em;text-transform:uppercase;color:#cfa64b;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+:root[data-skin='mahagoni'] .screen-head{border-bottom:1px solid var(--line);padding-bottom:12px}
+:root[data-skin='mahagoni'] .count{font-style:italic;font-family:var(--serif);font-size:17px}
+:root[data-skin='mahagoni'] h2{font-family:'Cinzel',serif;font-weight:500;font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--paper)}
+:root[data-skin='mahagoni'] .shelf-section-head h2{display:flex;align-items:center;gap:12px}
+:root[data-skin='mahagoni'] .shelf-section-head h2::after{content:"❦";font-size:13px;color:#cfa64b;letter-spacing:0;opacity:.9}
+:root[data-skin='mahagoni'] .shelf-section-sub{font-style:italic;font-size:14px}
+:root[data-skin='mahagoni'] .slot-art{border-bottom:0!important;position:relative;margin-bottom:10px}
+:root[data-skin='mahagoni'] .slot-art::after{content:"";position:absolute;left:0;right:0;bottom:-11px;height:11px;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.12),rgba(0,0,0,0.12)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x;border-top:1px solid #d6b25a;box-shadow:0 7px 9px -2px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,235,190,.25)}
+:root[data-skin='mahagoni'] .slot-caption{padding-top:14px}
+:root[data-skin='mahagoni'] .slot-title{font-family:var(--serif);font-weight:600;font-size:15.5px;line-height:1.2;height:calc(2*1.2em)}
+:root[data-skin='mahagoni'] .slot-author{font-style:italic;font-size:13.5px}
+:root[data-skin='mahagoni'] .slot-badge{font-family:'Cinzel',serif;letter-spacing:.08em;font-size:9px;border:1px solid #d6b25a;background:rgba(20,10,4,.82);color:#d6b25a}
+:root[data-skin='mahagoni'] .nav{background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.4)), url('./assets/wood-nav.jpg') 0 0/400px 100% repeat-x;border-top:2px solid #d6b25a;box-shadow:0 -6px 14px rgba(0,0,0,.5)}
+:root[data-skin='mahagoni'] .nav button{color:#d9c39a;font-family:var(--serif);font-size:13.5px;font-weight:600;letter-spacing:.06em;text-shadow:0 1px 1px rgba(0,0,0,.6)}
+:root[data-skin='mahagoni'] .nav button[aria-current='true']{color:#ffe29a}
+:root[data-skin='mahagoni'] .nav button[aria-current='true']::before{background:radial-gradient(circle,rgba(255,215,120,.38) 0%,transparent 72%)}
+:root[data-skin='mahagoni'] .sv-shelf{background:linear-gradient(rgba(0,0,0,.42),rgba(0,0,0,.12) 70%,rgba(0,0,0,.22));border-left:7px solid #3a2414;border-right:7px solid #3a2414;box-shadow:inset 10px 0 14px -8px rgba(0,0,0,.7),inset -10px 0 14px -8px rgba(0,0,0,.7)}
+:root[data-skin='mahagoni'] .sv-board{height:15px!important;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.12),rgba(0,0,0,0.12)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x!important;border-top:1px solid #d6b25a;box-shadow:0 8px 10px rgba(0,0,0,.6)!important}
+:root[data-skin='mahagoni'] .btn-primary{background:linear-gradient(#ddba62,#a8832f)!important;color:#1a1008!important;border:1px solid #d6b25a!important;font-family:var(--serif);font-weight:700;letter-spacing:.04em}
+:root[data-skin='mahagoni'] .seg3 button[aria-pressed='true']{color:#1a1008!important}
+:root[data-skin='mahagoni'] input,:root[data-skin='mahagoni'] select,:root[data-skin='mahagoni'] textarea{font-family:var(--sans)}
+
+:root[data-skin='oxford'][data-theme]{--night:#0d1712;--slate:#13211a;--raised:#1b2e24;--raised-2:#25392e;--board:#4a3220;--line:#27392e;--paper:#ece3c9;--dim:#a2b09c;--lamp:#d9b862;--lamp-wash:rgba(217,184,98,.18);--leaf:#9fc08a;--leaf-wash:rgba(159,192,138,.16);--alarm:#d0654b;--shadow-color:2,8,5;--nav-bg:#0b140f;--r:5px;--serif:'Crimson Pro',Georgia,serif;--sans:'Crimson Pro',Georgia,serif;}
+:root[data-skin='oxford']{background:#0d1712}
+:root[data-skin='oxford'] body{background-image:radial-gradient(130% 70% at 50% 0%,#17291f,#0f1b15 60%,#0a130e);background-color:#0d1712;background-attachment:fixed;background-size:100% 100%;font-size:17px;line-height:1.4}
+:root[data-skin='oxford'] body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.38) 100%)}
+:root[data-skin='oxford'] .wordmark{font-family:'Cinzel',serif;font-variation-settings:normal;font-weight:600;font-size:25px;letter-spacing:.2em;text-transform:uppercase;color:#d9b862;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+:root[data-skin='oxford'] .screen-head{border-bottom:1px solid var(--line);padding-bottom:12px}
+:root[data-skin='oxford'] .count{font-style:italic;font-family:var(--serif);font-size:17px}
+:root[data-skin='oxford'] h2{font-family:'Cinzel',serif;font-weight:500;font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--paper)}
+:root[data-skin='oxford'] .shelf-section-head h2{display:flex;align-items:center;gap:12px}
+:root[data-skin='oxford'] .shelf-section-head h2::after{content:"❦";font-size:13px;color:#d9b862;letter-spacing:0;opacity:.9}
+:root[data-skin='oxford'] .shelf-section-sub{font-style:italic;font-size:14px}
+:root[data-skin='oxford'] .slot-art{border-bottom:0!important;position:relative;margin-bottom:10px}
+:root[data-skin='oxford'] .slot-art::after{content:"";position:absolute;left:0;right:0;bottom:-11px;height:11px;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.34),rgba(0,0,0,0.34)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x;border-top:1px solid #e0c36d;box-shadow:0 7px 9px -2px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,235,190,.25)}
+:root[data-skin='oxford'] .slot-caption{padding-top:14px}
+:root[data-skin='oxford'] .slot-title{font-family:var(--serif);font-weight:600;font-size:15.5px;line-height:1.2;height:calc(2*1.2em)}
+:root[data-skin='oxford'] .slot-author{font-style:italic;font-size:13.5px}
+:root[data-skin='oxford'] .slot-badge{font-family:'Cinzel',serif;letter-spacing:.08em;font-size:9px;border:1px solid #e0c36d;background:rgba(20,10,4,.82);color:#e0c36d}
+:root[data-skin='oxford'] .nav{background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.6200000000000001),rgba(0,0,0,0.6200000000000001)), url('./assets/wood-nav.jpg') 0 0/400px 100% repeat-x;border-top:2px solid #e0c36d;box-shadow:0 -6px 14px rgba(0,0,0,.5)}
+:root[data-skin='oxford'] .nav button{color:#d9c39a;font-family:var(--serif);font-size:13.5px;font-weight:600;letter-spacing:.06em;text-shadow:0 1px 1px rgba(0,0,0,.6)}
+:root[data-skin='oxford'] .nav button[aria-current='true']{color:#ffe29a}
+:root[data-skin='oxford'] .nav button[aria-current='true']::before{background:radial-gradient(circle,rgba(255,215,120,.38) 0%,transparent 72%)}
+:root[data-skin='oxford'] .sv-shelf{background:linear-gradient(rgba(0,0,0,.42),rgba(0,0,0,.12) 70%,rgba(0,0,0,.22));border-left:7px solid #3a2414;border-right:7px solid #3a2414;box-shadow:inset 10px 0 14px -8px rgba(0,0,0,.7),inset -10px 0 14px -8px rgba(0,0,0,.7)}
+:root[data-skin='oxford'] .sv-board{height:15px!important;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.34),rgba(0,0,0,0.34)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x!important;border-top:1px solid #e0c36d;box-shadow:0 8px 10px rgba(0,0,0,.6)!important}
+:root[data-skin='oxford'] .btn-primary{background:linear-gradient(#ddba62,#a8832f)!important;color:#10170f!important;border:1px solid #e0c36d!important;font-family:var(--serif);font-weight:700;letter-spacing:.04em}
+:root[data-skin='oxford'] .seg3 button[aria-pressed='true']{color:#10170f!important}
+:root[data-skin='oxford'] input,:root[data-skin='oxford'] select,:root[data-skin='oxford'] textarea{font-family:var(--sans)}
+
+:root[data-skin='pergament'][data-theme]{--night:#e3d2ad;--slate:#dac79e;--raised:#d3be92;--raised-2:#c9b283;--board:#4a2f1c;--line:#b99e6c;--paper:#2a190e;--dim:#6a5133;--lamp:#7b1f2b;--lamp-wash:rgba(123,31,43,.14);--leaf:#4d6b3c;--leaf-wash:rgba(77,107,60,.16);--alarm:#9d2e22;--shadow-color:70,45,18;--nav-bg:#2a1a10;--r:5px;color-scheme:light;--serif:'Cormorant Garamond',Georgia,serif;--sans:'EB Garamond',Georgia,serif;}
+:root[data-skin='pergament']{background:#e3d2ad}
+:root[data-skin='pergament'] body{background-image:radial-gradient(130% 70% at 50% 0%,#ecdcb9,#e3d2ad 55%,#d9c699);background-color:#e3d2ad;background-attachment:fixed;background-size:100% 100%;font-size:17px;line-height:1.4}
+:root[data-skin='pergament'] body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.18) 100%)}
+:root[data-skin='pergament'] .wordmark{font-family:'Cinzel',serif;font-variation-settings:normal;font-weight:600;font-size:25px;letter-spacing:.2em;text-transform:uppercase;color:#7b1f2b;text-shadow:0 1px 0 rgba(0,0,0,.35)}
+:root[data-skin='pergament'] .screen-head{border-bottom:1px solid var(--line);padding-bottom:12px}
+:root[data-skin='pergament'] .count{font-style:italic;font-family:var(--serif);font-size:17px}
+:root[data-skin='pergament'] h2{font-family:'Cinzel',serif;font-weight:500;font-size:16px;letter-spacing:.14em;text-transform:uppercase;color:var(--paper)}
+:root[data-skin='pergament'] .shelf-section-head h2{display:flex;align-items:center;gap:12px}
+:root[data-skin='pergament'] .shelf-section-head h2::after{content:"❦";font-size:13px;color:#7b1f2b;letter-spacing:0;opacity:.9}
+:root[data-skin='pergament'] .shelf-section-sub{font-style:italic;font-size:14px}
+:root[data-skin='pergament'] .slot-art{border-bottom:0!important;position:relative;margin-bottom:10px}
+:root[data-skin='pergament'] .slot-art::after{content:"";position:absolute;left:0;right:0;bottom:-11px;height:11px;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.1),rgba(0,0,0,0.1)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x;border-top:1px solid #b8923f;box-shadow:0 7px 9px -2px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,235,190,.25)}
+:root[data-skin='pergament'] .slot-caption{padding-top:14px}
+:root[data-skin='pergament'] .slot-title{font-family:var(--serif);font-weight:600;font-size:15.5px;line-height:1.2;height:calc(2*1.2em)}
+:root[data-skin='pergament'] .slot-author{font-style:italic;font-size:13.5px}
+:root[data-skin='pergament'] .slot-badge{font-family:'Cinzel',serif;letter-spacing:.08em;font-size:9px;border:1px solid #b8923f;background:rgba(20,10,4,.82);color:#b8923f}
+:root[data-skin='pergament'] .nav{background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.38),rgba(0,0,0,0.38)), url('./assets/wood-nav.jpg') 0 0/400px 100% repeat-x;border-top:2px solid #b8923f;box-shadow:0 -6px 14px rgba(0,0,0,.5)}
+:root[data-skin='pergament'] .nav button{color:#d9c39a;font-family:var(--serif);font-size:13.5px;font-weight:600;letter-spacing:.06em;text-shadow:0 1px 1px rgba(0,0,0,.6)}
+:root[data-skin='pergament'] .nav button[aria-current='true']{color:#ffe29a}
+:root[data-skin='pergament'] .nav button[aria-current='true']::before{background:radial-gradient(circle,rgba(255,215,120,.38) 0%,transparent 72%)}
+:root[data-skin='pergament'] .sv-shelf{background:linear-gradient(rgba(0,0,0,.42),rgba(0,0,0,.12) 70%,rgba(0,0,0,.22));border-left:7px solid #3a2414;border-right:7px solid #3a2414;box-shadow:inset 10px 0 14px -8px rgba(0,0,0,.7),inset -10px 0 14px -8px rgba(0,0,0,.7)}
+:root[data-skin='pergament'] .sv-board{height:15px!important;background:linear-gradient(rgba(255,236,190,.18),transparent 38%,rgba(0,0,0,.38)), linear-gradient(rgba(0,0,0,0.1),rgba(0,0,0,0.1)), url('./assets/wood-plank.jpg') 0 0/360px 100% repeat-x!important;border-top:1px solid #b8923f;box-shadow:0 8px 10px rgba(0,0,0,.6)!important}
+:root[data-skin='pergament'] .btn-primary{background:linear-gradient(#ddba62,#a8832f)!important;color:#1a1008!important;border:1px solid #b8923f!important;font-family:var(--serif);font-weight:700;letter-spacing:.04em}
+:root[data-skin='pergament'] .seg3 button[aria-pressed='true']{color:#f3e7c9!important}
+:root[data-skin='pergament'] input,:root[data-skin='pergament'] select,:root[data-skin='pergament'] textarea{font-family:var(--sans)}
+
+/* ---- Schalter in den Einstellungen: jedes Segment sieht aus wie sein Design ---- */
+.skin-switch{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:100%}
+.skin-switch button{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:15px;letter-spacing:.04em;padding:11px 4px;border-radius:7px;border:1px solid;cursor:pointer;transition:transform .12s ease}
+.skin-switch button:active{transform:scale(.97)}
+.skin-switch button[data-k='mahagoni']{background:linear-gradient(#2a1b11,#150e09);color:#e6c36a;border-color:#8a6a2f}
+.skin-switch button[data-k='oxford']{background:linear-gradient(#17291f,#0d1712);color:#e0c36d;border-color:#3b5242}
+.skin-switch button[data-k='pergament']{background:linear-gradient(#ecdcb9,#dcc99f);color:#7b1f2b;border-color:#b8923f}
+.skin-switch button[aria-pressed='true']{outline:2px solid var(--lamp);outline-offset:2px}
+.skin-hint{display:block;margin-top:6px;font-size:12px;color:var(--dim)}
+.setting-row.skin-row{flex-wrap:wrap}
+.skin-row .skin-switch{flex-basis:100%}
+.skin-row .skin-hint{flex-basis:100%;margin-top:-2px}
