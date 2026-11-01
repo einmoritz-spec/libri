@@ -2533,6 +2533,9 @@ button.review-tap::after { position: absolute; top: 12px; right: 14px; }
   min-width: 34px; padding: 4px 8px; border-radius: 8px;
   background: var(--line); border: 0; color: var(--dim); font-size: 13px; font-weight: 600;
 }
+.pg-total { margin: 10px 0 0; font-size: 13px; color: var(--dim); text-align: center; }
+.pg-total b { font-weight: 600; color: inherit; }
+.pg-link { background: none; border: 0; padding: 2px 4px; font: inherit; color: var(--lamp); text-decoration: underline; text-underline-offset: 3px; }
 .pg-mode {
   display: block; margin: 10px auto 0; background: none; border: 0;
   color: var(--dim); font-size: 13px; padding: 4px 8px;

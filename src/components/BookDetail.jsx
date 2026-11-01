@@ -136,6 +136,8 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   const [pickFormat, setPickFormat] = useState(false)
   const [rereading, setRereading] = useState(false)
   const [setupTotal, setSetupTotal] = useState('')
+  const [editTotal, setEditTotal] = useState(false)
+  const [totalWarn, setTotalWarn] = useState(false)
   // Einheit der Eingabe am eReader: Prozent oder Seitenzahl des Geräts
   const [unit, setUnit] = useState(() => {
     try { return localStorage.getItem('libri:ebookUnit') === 'S' ? 'S' : '%' } catch { return '%' }
@@ -162,7 +164,7 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
   const aTotal = audio ? audioTotal(book) : null
   const u = audio ? (aTotal ? aunit : '%') : unit
   const total = local.ebookPages
-  const needTotal = ebook && u === 'S' && !total
+  const needTotal = ebook && u === 'S' && (!total || editTotal)
   const scale = conv ? (u === 'S' ? total : u === 'T' ? aTotal.min : 100) : null
   const toPrint = (v) => (conv && scale ? clampPage((v / scale) * book.pages) : clampPage(v))
   const fromPrint = (p) => (conv && scale ? Math.round((p / book.pages) * scale) : p)
@@ -255,6 +257,20 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
     setLocal((l) => ({ ...l, ...changes }))
     if (message) notify(message)
     updateBook(book.id, changes).catch(() => notify('Speichern hat nicht geklappt.'))
+  }
+
+  /** Gesamtseiten im eReader merken. Weicht die Zahl stark vom gedruckten
+      Buch ab (z. B. 16 statt 640), erst nachfragen — sonst gilt die nächste
+      Eingabe schon als letzte Seite und das Buch wird abgeschlossen. */
+  function saveTotal() {
+    const n = Math.round(Number(setupTotal))
+    if (!(n > 0)) return
+    const odd = book.pages && (n < book.pages * 0.4 || n > book.pages * 3)
+    if (odd && !totalWarn) { setTotalWarn(true); return }
+    apply({ ebookPages: n })
+    setSetupTotal('')
+    setEditTotal(false)
+    setTotalWarn(false)
   }
 
   async function finishBook(format) {
@@ -405,15 +421,37 @@ export default function BookDetail({ book, onClose, notify, onAuthor }) {
               <div className="pg-bar" aria-hidden="true"><i style={{ width: `${pct}%` }} /></div>
             ) : null}
 
+            {ebook && u === 'S' && total && !editTotal && (
+              <p className="pg-total">
+                Im eReader insgesamt <b>{total}</b> Seiten ·{' '}
+                <button className="pg-link" onClick={() => { setSetupTotal(String(total)); setEditTotal(true) }}>ändern</button>
+              </p>
+            )}
+
             {needTotal && (
-              <div className="pg-entry" style={{ marginTop: 12 }}>
-                <input className="pg-input" type="number" inputMode="numeric" min="1"
-                  placeholder="Seiten im eReader" value={setupTotal}
-                  onChange={(e) => setSetupTotal(e.target.value)} aria-label="Seiten im eReader" />
-                <button className="btn btn-primary" disabled={!(Number(setupTotal) > 0)}
-                  onClick={() => { apply({ ebookPages: Math.round(Number(setupTotal)) }); setSetupTotal('') }}>
-                  Merken
-                </button>
+              <div style={{ marginTop: 12 }}>
+                <p className="pg-total" style={{ marginTop: 0 }}>
+                  Wie viele Seiten hat das Buch in deinem eReader <b>insgesamt</b>?
+                </p>
+                <div className="pg-entry" style={{ marginTop: 0 }}>
+                  <input className="pg-input" type="number" inputMode="numeric" min="1"
+                    placeholder="Seiten insgesamt" value={setupTotal}
+                    onChange={(e) => { setSetupTotal(e.target.value); setTotalWarn(false) }}
+                    aria-label="Seiten im eReader insgesamt" />
+                  <button className="btn btn-primary" disabled={!(Number(setupTotal) > 0)} onClick={saveTotal}>
+                    {totalWarn ? 'Trotzdem merken' : 'Merken'}
+                  </button>
+                </div>
+                {totalWarn && (
+                  <p className="pg-total">
+                    Gedruckt hat das Buch {book.pages} Seiten, {Math.round(Number(setupTotal))} wirkt ungewöhnlich.
+                    Gemeint ist die Gesamtzahl im eReader, nicht die aktuelle Seite.
+                  </p>
+                )}
+                {editTotal && (
+                  <button className="pg-link" style={{ display: 'block', margin: '8px auto 0' }}
+                    onClick={() => { setEditTotal(false); setTotalWarn(false); setSetupTotal('') }}>Abbrechen</button>
+                )}
               </div>
             )}
             {!needTotal && (
